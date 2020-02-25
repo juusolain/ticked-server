@@ -12,12 +12,21 @@ import { v4 as uuidv4 } from 'uuid';
 //Config
 const secret = process.env.secret || crypto.randomBytes(128).toString('base64'); //get secret from env or generate new, possibly dangerous, but better than using pre-defined secret
 const DB_URL = process.env.DATABASE_URL;
-const port = process.env.PORT || 80;
+const PORT = process.env.PORT || 80;
 
 //Setting up express
 const app = express();
 
 //Middleware
+
+//Headers
+app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-type,Authorization');
+    next();
+});
+
+//Bodyparser
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -177,4 +186,4 @@ app.use(function (err, req, res, next) {
     }
 });
 
-app.listen(process.env.port || 80);
+app.listen(PORT || 80);
