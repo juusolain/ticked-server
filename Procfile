@@ -1,1 +1,1 @@
-web: node index.js
+web: node --experimental-modules index.js

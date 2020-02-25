@@ -1,6 +1,7 @@
 {
   "name": "ticked-server",
   "version": "0.0.1",
+  "type": "module",
   "description": "Server for ticked",
   "main": "index.js",
   "scripts": {

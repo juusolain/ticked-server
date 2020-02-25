@@ -1,18 +1,19 @@
 import express from 'express';
 import NodeCache from 'node-cache';
-import { createPool } from 'slonik';
-import { createQueryCacheInterceptor } from 'slonik-interceptor-query-cache';
+import slonikQCache from 'slonik-interceptor-query-cache';
+import Slonik from 'slonik';
+const sql = Slonik.sql;
 import bodyParser from 'body-parser';
 import JWT from 'jsonwebtoken';
 import expressJWT from 'express-jwt';
 import crypto from 'crypto';
 import argon2 from 'argon2';
-import { v4 as uuidv4 } from 'uuid';
+import uuid from 'uuid';
 
 //Config
 const secret = process.env.secret || crypto.randomBytes(128).toString('base64'); //get secret from env or generate new, possibly dangerous, but better than using pre-defined secret
-const DB_URL = process.env.DATABASE_URL;
-const PORT = process.env.PORT || 8080;
+const DB_URL = process.env.DATABASE_URL+'?ssl=1&rejectUnauthorized=true';
+const PORT = process.env.PORT || 5000;
 
 //Setting up express
 const app = express();
@@ -20,11 +21,11 @@ const app = express();
 //Middleware
 
 //Headers
-
 app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Headers', 'Content-type,Authorization');
     next();
 });
+
 
 //Bodyparser
 app.use(bodyParser.json());
@@ -48,7 +49,7 @@ const hashQuery = (query) => {
 
 //Create cacheinterceptor
 const interceptors = [
-    createQueryCacheInterceptor({
+    slonikQCache.createQueryCacheInterceptor({
         storage: {
         get: (query) => {
           return cache.get(hashQuery(query)) || null;
@@ -60,7 +61,7 @@ const interceptors = [
     }),
 ];
 
-const pool = createPool(DB_URL, {
+const pool = Slonik.createPool(DB_URL, {
     interceptors: interceptors,
     maximumPoolSize: 10,
     idleTimeout: 30000,
@@ -74,11 +75,11 @@ app.post('/login', async(req, res)=>{
         const pgReturn = await pool.maybeOne(sql`SELECT password, userid FROM users WHERE username = ${username}`); //Get password hash and userid by username
         if(pgReturn){
             if(await argon2.verify(pgReturn.password, password)){//Check password
-                let token = JWT.sign({ id: pgReturn.userid, username: username }, secret, { expiresIn: 129600 }); // Sign JWT token
+                let token = JWT.sign({ userid: pgReturn.userid, username: username }, secret, { expiresIn: 129600 }); // Sign JWT token
                 res.status(200).json({
                     success: true,
                     err: null,
-                    token
+                    token: token,
                 });
             }else{//Invalid password
                 res.status(401).json({
@@ -103,19 +104,22 @@ app.post('/login', async(req, res)=>{
 //Register
 app.post('/register', async(req, res)=>{
     const {username, password} = req.body;
-    const userid = uuidv4();
+    console.log(req.body);
+    const userid = uuid.v4();
     try{
         const hashedPassword = await argon2.hash(password);
         const pgReturn = await pool.maybeOne(sql`SELECT userid FROM users WHERE username = ${username}`); //Check if user exists
         if(!pgReturn){//User doesnt exist
             await pool.query(sql`INSERT INTO users (userid, password, username) VALUES (${userid}, ${hashedPassword}, ${username})`); //Insert
-            let token = JWT.sign({ id: userid, username: username }, secret, { expiresIn: 129600 }); // Sign JWT token
+            let token = JWT.sign({ userid: userid, username: username }, secret, { expiresIn: 129600 }); // Sign JWT token
             res.json({
                 success: true,
                 err: null,
-                token
+                token: token,
             });
+            if (process.env.NODE_ENV == 'development') console.log(`User registered ${username}: ${token}`);
         }else{
+            if (process.env.NODE_ENV == 'development') console.log(`User already exists`);
             res.status(401).json({
                 success: false,
                 token: null,
@@ -186,4 +190,6 @@ app.use(function (err, req, res, next) {
     }
 });
 
-app.listen(PORT);
+app.listen(PORT, ()=>{
+    console.log(`listening on ${PORT}`);
+});
