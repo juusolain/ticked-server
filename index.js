@@ -8,13 +8,11 @@ import expressJWT from 'express-jwt';
 import crypto from 'crypto';
 import argon2 from 'argon2';
 import { v4 as uuidv4 } from 'uuid';
-import cors from 'cors';
 
 //Config
 const secret = process.env.secret || crypto.randomBytes(128).toString('base64'); //get secret from env or generate new, possibly dangerous, but better than using pre-defined secret
 const DB_URL = process.env.DATABASE_URL;
 const PORT = process.env.PORT || 8080;
-const allowedOrigins = ['https://ticked-server.herokuapp.com', 'http://localhost:8080']
 
 //Setting up express
 const app = express();
@@ -22,10 +20,6 @@ const app = express();
 //Middleware
 
 //Headers
-
-app.use(cors({
-    origin: allowedOrigins,
-}));
 
 app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Headers', 'Content-type,Authorization');
