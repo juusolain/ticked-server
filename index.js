@@ -60,12 +60,12 @@ const pool = createPool(DB_URL, {
 
 //Login
 app.post('/login', async(req, res)=>{
-    const {userid, password} = req.body;
+    const {username, password} = req.body;
     try{
-        const pgReturn = await pool.maybeOne(sql`SELECT password, username FROM users WHERE userid = ${userid}`); //Get password hash and username by userid
+        const pgReturn = await pool.maybeOne(sql`SELECT password, userid FROM users WHERE username = ${username}`); //Get password hash and userid by username
         if(pgReturn){
             if(await argon2.verify(pgReturn.password, password)){//Check password
-                let token = JWT.sign({ id: userid, username: username }, secret, { expiresIn: 129600 }); // Sign JWT token
+                let token = JWT.sign({ id: pgReturn.userid, username: username }, secret, { expiresIn: 129600 }); // Sign JWT token
                 res.json({
                     success: true,
                     err: null,
@@ -97,7 +97,7 @@ app.post('/register', async(req, res)=>{
     const userid = uuidv4();
     try{
         const hashedPassword = await argon2.hash(password);
-        const pgReturn = await pool.maybeOne(sql`SELECT username FROM users WHERE userid = ${userid}`); //Check if user exists
+        const pgReturn = await pool.maybeOne(sql`SELECT userid FROM users WHERE username = ${username}`); //Check if user exists
         if(!pgReturn){//User doesnt exist
             await pool.query(sql`INSERT INTO users (userid, password, username) VALUES (${userid}, ${hashedPassword}, ${username})`); //Insert
             let token = JWT.sign({ id: userid, username: username }, secret, { expiresIn: 129600 }); // Sign JWT token
@@ -110,7 +110,7 @@ app.post('/register', async(req, res)=>{
             res.status(401).json({
                 success: false,
                 token: null,
-                err: 'Userid already exists???'
+                err: 'User already exists'
             });
         }
     }
