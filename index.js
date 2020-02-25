@@ -8,11 +8,13 @@ import expressJWT from 'express-jwt';
 import crypto from 'crypto';
 import argon2 from 'argon2';
 import { v4 as uuidv4 } from 'uuid';
+import cors from 'cors';
 
 //Config
 const secret = process.env.secret || crypto.randomBytes(128).toString('base64'); //get secret from env or generate new, possibly dangerous, but better than using pre-defined secret
 const DB_URL = process.env.DATABASE_URL;
-const PORT = process.env.PORT || 80;
+const PORT = process.env.PORT || 8080;
+const allowedOrigins = ['https://ticked-server.herokuapp.com', 'http://localhost:8080']
 
 //Setting up express
 const app = express();
@@ -20,8 +22,12 @@ const app = express();
 //Middleware
 
 //Headers
+
+app.use(cors({
+    origin: allowedOrigins,
+}));
+
 app.use((req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
     res.setHeader('Access-Control-Allow-Headers', 'Content-type,Authorization');
     next();
 });
@@ -75,7 +81,7 @@ app.post('/login', async(req, res)=>{
         if(pgReturn){
             if(await argon2.verify(pgReturn.password, password)){//Check password
                 let token = JWT.sign({ id: pgReturn.userid, username: username }, secret, { expiresIn: 129600 }); // Sign JWT token
-                res.json({
+                res.status(200).json({
                     success: true,
                     err: null,
                     token
@@ -186,4 +192,4 @@ app.use(function (err, req, res, next) {
     }
 });
 
-app.listen(PORT || 80);
+app.listen(PORT);
