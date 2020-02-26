@@ -109,6 +109,7 @@ app.post('/register', async(req, res)=>{
     try{
         const hashedPassword = await argon2.hash(password);
         const pgReturn = await pool.maybeOne(sql`SELECT userid FROM users WHERE username = ${username}`); //Check if user exists
+        console.log(pgReturn);
         if(!pgReturn){//User doesnt exist
             await pool.query(sql`INSERT INTO users (userid, password, username) VALUES (${userid}, ${hashedPassword}, ${username})`); //Insert
             let token = JWT.sign({ userid: userid, username: username }, secret, { expiresIn: 129600 }); // Sign JWT token
