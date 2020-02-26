@@ -65,6 +65,7 @@ const pool = Slonik.createPool(DB_URL, {
     interceptors: interceptors,
     maximumPoolSize: 10,
     idleTimeout: 30000,
+    connectionTimeout: 15000,
 });
 
 
