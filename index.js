@@ -14,6 +14,7 @@ import uuid from 'uuid';
 const secret = process.env.secret || crypto.randomBytes(128).toString('base64'); //get secret from env or generate new, possibly dangerous, but better than using pre-defined secret
 const DB_URL = process.env.DATABASE_URL+'?ssl=1&rejectUnauthorized=true';
 const PORT = process.env.PORT || 5000;
+const isDev = true;
 
 //Setting up express
 const app = express();
@@ -77,7 +78,7 @@ app.post('/login', async(req, res)=>{
         if(pgReturn){
             if(await argon2.verify(pgReturn.password, password)){//Check password
                 let token = JWT.sign({ userid: pgReturn.userid, username: username }, secret, { expiresIn: 129600 }); // Sign JWT token
-                res.status(200).json({
+                res.json({
                     success: true,
                     err: null,
                     token: token,
@@ -105,12 +106,10 @@ app.post('/login', async(req, res)=>{
 //Register
 app.post('/register', async(req, res)=>{
     const {username, password} = req.body;
-    console.log(req.body);
     const userid = uuid.v4();
     try{
         const hashedPassword = await argon2.hash(password);
         const pgReturn = await pool.maybeOne(sql`SELECT userid FROM users WHERE username = ${username}`); //Check if user exists
-        console.log(pgReturn);
         if(!pgReturn){//User doesnt exist
             await pool.query(sql`INSERT INTO users (userid, password, username) VALUES (${userid}, ${hashedPassword}, ${username})`); //Insert
             let token = JWT.sign({ userid: userid, username: username }, secret, { expiresIn: 129600 }); // Sign JWT token
@@ -119,9 +118,9 @@ app.post('/register', async(req, res)=>{
                 err: null,
                 token: token,
             });
-            if (process.env.NODE_ENV == 'development') console.log(`User registered ${username}: ${token}`);
+            if (isDev) console.log(`User registered ${username}: ${token}`);
         }else{
-            if (process.env.NODE_ENV == 'development') console.log(`User already exists`);
+            if (isDev) console.log(`User already exists`);
             res.status(401).json({
                 success: false,
                 token: null,
