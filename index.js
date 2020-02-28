@@ -109,7 +109,6 @@ app.post('/login', async(req, res)=>{
 //Register
 app.post('/register', async(req, res)=>{
     const {username, password} = req.body;
-    console.log(req.body);
     const userid = uuid.v4();
     try{
         const hashedPassword = await argon2.hash(password);
@@ -144,47 +143,77 @@ app.post('/register', async(req, res)=>{
 
 
 //Proper API
-app.get('/getTask/single', async(req, res)=>{
+app.post('/getTask/single', JWTmw, async(req, res)=>{
     await pool.maybeOne(); //Query task
 });
 
-app.get('/getTask/all', async(req, res)=>{
-    var taskIDs = await getTaskIDs();
-    var tasks = [];
-    await Promise.all(taskIDs.map(async (taskID) => {
-        const task = await getTask(taskID);
-        tasks.push(task);
-    }));
-    res.json(tasks);
-});
-
-app.get('/newTask', async(req, res)=>{
-
-});
-
-app.get('/updateTask', async(req, res)=>{
-
-});
-
-app.get('/removeTask', async(req, res)=>{
-
-});
-
-async function getTaskIDs(userID){
-    //Not implemented, for debug
-    let tasks = [];
-    for (let i = 0; i < 50; i++) {
-        tasks.push(`task${i}`);
-        
+app.post('/getTask/all', JWTmw, async(req, res)=>{
+    try {
+        const tasks = await getTasks(req.user.userid);
+        res.json({
+            success: true,
+            tasks: tasks
+        })
+    } catch (error) {
+        res.json({
+            success: false
+        })
     }
-    return tasks;
+});
+
+app.post('/newTask', JWTmw, async(req, res)=>{
+    var {name, description} = req.body;
+    const taskid = uuid.v4();
+    try {
+        if(!name) name = null
+        if(!description) description = null
+        const pgRes = await pool.query(sql`INSERT INTO tasks (userid, taskid, name, description) VALUES (${req.user.userid}, ${taskid}, ${name}, ${description})`);
+        res.json({
+            success: true
+        });
+    } catch (error) {
+        res.json({
+            success: false,
+            error: "Internal server error"
+        });
+        console.error(error);
+    }
+    
+});
+
+app.post('/updateTask', JWTmw, async(req, res)=>{
+    try {
+        await updateTask(req.body);
+        res.json({
+            success: true,
+        });
+    } catch (error) {
+        res.json({
+            success: false,
+            error: error
+        });
+    }
+    
+});
+
+app.post('/removeTask', JWTmw, async(req, res)=>{
+
+});
+
+async function getTasks(userID){
+    try {
+        const res = await pool.query(sql`SELECT * FROM tasks WHERE userid=${userID};`);
+        return res.rows;
+    } catch (error) {
+        throw new Error('Internal server error');
+    }
 }
 
 async function getTask(taskID){
     //Not implemented, for debug
     return {
         name: taskID,
-        id: taskID,
+        taskid: taskID,
         description: "A nice task that should overflow. Here's a lot of stuff to fill space: Lorem ipsum dolor sit amet, phasellus vestibulum enim, volutpat elit elit. Mi curabitur, magna parturient euismod, pede adipiscing arcu. Tincidunt in pulvinar, ut natoque, erat volutpat dolor. In gravida, vehicula fermentum blandit, consectetuer arcu. Sit quia, tincidunt quis gravida. Placerat dui arcu, vestibulum interdum, convallis tincidunt. Lectus deserunt felis, duis ante felis. In nunc curabitur, dui nec vulputate. Tristique ut suspendisse, et justo, fringilla semper sem. Sed sem in. Metus varius, cursus sollicitudin, aliquet nulla hac. Volutpat eros, mi parturient, lectus vestibulum metus."
     }
 }
@@ -193,8 +222,31 @@ async function newTask(){
 
 }
 
-async function updateTask(){
+async function updateTask(newTask){
+    if(newTask.taskid){
+        try {
+            if(!newTask.name) newTask.name = null
+            if(!newTask.description) newTask.description = null
+            if(newTask.description === -1 && newTask.name !== -1){//modify name
+                console.log("Modifying name");
+                await pool.query(sql`UPDATE tasks SET name = ${newTask.name} WHERE taskid=${newTask.taskid};`);
+            }else if(newTask.name === -1 && newTask.description !== -1){//modify desc
+                console.log("Modifying desc");
+                await pool.query(sql`UPDATE tasks SET description = ${newTask.description} WHERE taskid=${newTask.taskid};`);
+            }else if(newTask.name !== -1 && newTask.description !== -1){ //modify all
+                console.log("Modifying both");
+                await pool.query(sql`UPDATE tasks SET name = ${newTask.name}, description = ${newTask.description} WHERE taskid=${newTask.taskid};`);
+            }else{
+                throw new Error('Nothing to modify');
+            }
+        } catch (error) {
+            console.error(error);
+            throw error;
+        }
 
+    }else{
+        throw new Error('No task id');
+    }
 }
 
 async function removeTask(){
