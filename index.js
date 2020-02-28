@@ -228,13 +228,10 @@ async function updateTask(newTask){
             if(!newTask.name) newTask.name = null
             if(!newTask.description) newTask.description = null
             if(newTask.description === -1 && newTask.name !== -1){//modify name
-                console.log("Modifying name");
                 await pool.query(sql`UPDATE tasks SET name = ${newTask.name} WHERE taskid=${newTask.taskid};`);
             }else if(newTask.name === -1 && newTask.description !== -1){//modify desc
-                console.log("Modifying desc");
                 await pool.query(sql`UPDATE tasks SET description = ${newTask.description} WHERE taskid=${newTask.taskid};`);
             }else if(newTask.name !== -1 && newTask.description !== -1){ //modify all
-                console.log("Modifying both");
                 await pool.query(sql`UPDATE tasks SET name = ${newTask.name}, description = ${newTask.description} WHERE taskid=${newTask.taskid};`);
             }else{
                 throw new Error('Nothing to modify');
