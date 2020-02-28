@@ -76,20 +76,20 @@ app.post('/login', async(req, res)=>{
         if(pgReturn){
             if(await argon2.verify(pgReturn.password, password)){//Check password
                 let token = JWT.sign({ userid: pgReturn.userid, username: username }, secret, { expiresIn: 129600 }); // Sign JWT token
-                res.status(200).json({
+                res.json({
                     success: true,
                     err: null,
                     token: token,
                 });
             }else{//Invalid password
-                res.status(401).json({
+                res.json({
                     success: false,
                     token: null,
                     err: 'Username or password is incorrect'
                 });
             }
         }else{//Invalid query (incorrect userid)
-            res.status(401).json({
+            res.json({
                 success: false,
                 token: null,
                 err: 'Username or password is incorrect'
@@ -98,6 +98,11 @@ app.post('/login', async(req, res)=>{
     }
     catch(err){//Something broke
         console.error(err);
+        res.json({
+            success: false,
+            token: null,
+            err: 'Internal server error'
+        });
     }
 });
 
@@ -120,7 +125,7 @@ app.post('/register', async(req, res)=>{
             if (process.env.NODE_ENV == 'development') console.log(`User registered ${username}: ${token}`);
         }else{
             if (process.env.NODE_ENV == 'development') console.log(`User already exists`);
-            res.status(401).json({
+            res.json({
                 success: false,
                 token: null,
                 err: 'User already exists'
@@ -129,6 +134,11 @@ app.post('/register', async(req, res)=>{
     }
     catch(err){//Something broke
         console.error(err);
+        res.json({
+            success: false,
+            token: null,
+            err: 'Internal server error'
+        });
     }
 });
 
@@ -161,11 +171,22 @@ app.get('/removeTask', async(req, res)=>{
 });
 
 async function getTaskIDs(userID){
-
+    //Not implemented, for debug
+    let tasks = [];
+    for (let i = 0; i < 50; i++) {
+        tasks.push(`task${i}`);
+        
+    }
+    return tasks;
 }
 
 async function getTask(taskID){
-
+    //Not implemented, for debug
+    return {
+        name: taskID,
+        id: taskID,
+        description: "A nice task that should overflow. Here's a lot of stuff to fill space: Lorem ipsum dolor sit amet, phasellus vestibulum enim, volutpat elit elit. Mi curabitur, magna parturient euismod, pede adipiscing arcu. Tincidunt in pulvinar, ut natoque, erat volutpat dolor. In gravida, vehicula fermentum blandit, consectetuer arcu. Sit quia, tincidunt quis gravida. Placerat dui arcu, vestibulum interdum, convallis tincidunt. Lectus deserunt felis, duis ante felis. In nunc curabitur, dui nec vulputate. Tristique ut suspendisse, et justo, fringilla semper sem. Sed sem in. Metus varius, cursus sollicitudin, aliquet nulla hac. Volutpat eros, mi parturient, lectus vestibulum metus."
+    }
 }
 
 async function newTask(){
@@ -182,7 +203,8 @@ async function removeTask(){
 
 //Error middleware
 app.use(function (err, req, res, next) {
-    if (err.name === 'UnauthorizedError') { // Invalid password, lets not log
+    if (err.name === 'UnauthorizedError') { // Invalid token, lets log as invalidToken
+        console.warn('Invalid token', err);
         res.status(401).send(err);
     }
     else {
