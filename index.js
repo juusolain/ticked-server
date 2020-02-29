@@ -145,11 +145,11 @@ app.post('/register', async(req, res)=>{
 
 
 //Proper API
-app.get('/getTask/single', JWTmw, async(req, res)=>{
+app.post('/getTask/single', JWTmw, async(req, res)=>{
     await pool.maybeOne(); //Query task
 });
 
-app.get('/getTask/all', JWTmw, async(req, res)=>{
+app.post('/getTask/all', JWTmw, async(req, res)=>{
     try {
         const tasks = await getTasks(req.user.userid);
         res.json({
