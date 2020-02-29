@@ -14,6 +14,7 @@ import uuid from 'uuid';
 const secret = process.env.secret || crypto.randomBytes(128).toString('base64'); //get secret from env or generate new, possibly dangerous, but better than using pre-defined secret
 const DB_URL = process.env.DATABASE_URL+'?ssl=1&rejectUnauthorized=true';
 const PORT = process.env.PORT || 5000;
+const isDev = true;
 
 //Setting up express
 const app = express();
@@ -65,6 +66,7 @@ const pool = Slonik.createPool(DB_URL, {
     interceptors: interceptors,
     maximumPoolSize: 10,
     idleTimeout: 30000,
+    connectionTimeout: 15000,
 });
 
 
@@ -121,7 +123,7 @@ app.post('/register', async(req, res)=>{
                 err: null,
                 token: token,
             });
-            if (process.env.NODE_ENV == 'development') console.log(`User registered ${username}: ${token}`);
+            if (isDev) console.log(`User registered ${username}: ${token}`);
         }else{
             if (process.env.NODE_ENV == 'development') console.log(`User already exists`);
             res.json({
