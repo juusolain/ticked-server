@@ -229,9 +229,9 @@ async function updateTask(newTask){
         try {
             var setVars = [];
             var setString = "";
-            if(newTask.description !== -1) setVars.push(`description = ${newTask.description}`);
-            if(newTask.name !== -1) setVars.push(`name = ${newTask.name}`);
-            if(newTask.alarm !== -1) setVars.push(`alarm = ${newTask.alarm}`);
+            if(newTask.description !== -1 && newTask.description !== undefined) setVars.push(`description = ${newTask.description}`);
+            if(newTask.name !== -1 && newTask.name !== undefined) setVars.push(`name = ${newTask.name}`);
+            if(newTask.alarm !== -1 && newTask.alarm !== undefined) setVars.push(`alarm = ${newTask.alarm}`);
             setString=setVars.join(', ');
             await pool.query(sql`UPDATE tasks SET ${setString} WHERE taskid=${newTask.taskid};`);
         } catch (error) {
