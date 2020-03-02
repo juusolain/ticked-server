@@ -251,15 +251,23 @@ async function deleteTask(taskid, userid){
 async function updateTask(newTask){
     if(newTask.taskid){
         try {
-            if(!newTask.name) newTask.name = null;
-            if(!newTask.description) newTask.description = null;
-            if(!newTask.alarm) newTask.alarm = null;
-            await pool.query(sql`UPDATE tasks SET name = ${newTask.name}, description = ${newTask.description}, alarm = ${newTask.alarm} WHERE taskid=${newTask.taskid};`);
+            var setVars = [];
+            var setString = "";
+            for (const key in newTask) {
+                const item = newTask[key];
+                if(item !== -1 && item !== undefined && key !== 'taskid'){
+                    setVars.push(`${key} = ${item}`);
+                }
+            }
+            if(setVars.length < 1){
+                throw new Error('Trying to update with no changes');
+            }
+            setString=setVars.join(', ');
+            await pool.query(sql`UPDATE tasks SET ${setString} WHERE taskid=${newTask.taskid};`);
         } catch (error) {
             console.error(error);
             throw error;
         }
-
     }else{
         throw new Error('No task id');
     }
