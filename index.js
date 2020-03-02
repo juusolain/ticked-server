@@ -227,17 +227,13 @@ async function newTask(){
 async function updateTask(newTask){
     if(newTask.taskid){
         try {
-            if(!newTask.name) newTask.name = null
-            if(!newTask.description) newTask.description = null
-            if(newTask.description === -1 && newTask.name !== -1){//modify name
-                await pool.query(sql`UPDATE tasks SET name = ${newTask.name} WHERE taskid=${newTask.taskid};`);
-            }else if(newTask.name === -1 && newTask.description !== -1){//modify desc
-                await pool.query(sql`UPDATE tasks SET description = ${newTask.description} WHERE taskid=${newTask.taskid};`);
-            }else if(newTask.name !== -1 && newTask.description !== -1){ //modify all
-                await pool.query(sql`UPDATE tasks SET name = ${newTask.name}, description = ${newTask.description} WHERE taskid=${newTask.taskid};`);
-            }else{
-                throw new Error('Nothing to modify');
-            }
+            var setVars = [];
+            var setString = "";
+            if(newTask.description !== -1) setVars.push(`description = ${newTask.description}`);
+            if(newTask.name !== -1) setVars.push(`name = ${newTask.name}`);
+            if(newTask.alarm !== -1) setVars.push(`alarm = ${newTask.alarm}`);
+            setString=setVars.join(', ');
+            await pool.query(sql`UPDATE tasks SET ${setString} WHERE taskid=${newTask.taskid};`);
         } catch (error) {
             console.error(error);
             throw error;
