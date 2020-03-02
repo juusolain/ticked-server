@@ -183,6 +183,10 @@ app.post('/newTask', JWTmw, async(req, res)=>{
     
 });
 
+app.post('/removeTask', JWTmw, async(req, res)=>{
+
+})
+
 app.post('/updateTask', JWTmw, async(req, res)=>{
     try {
         await updateTask(req.body);
@@ -198,8 +202,18 @@ app.post('/updateTask', JWTmw, async(req, res)=>{
     
 });
 
-app.post('/removeTask', JWTmw, async(req, res)=>{
-
+app.post('/deleteTask', JWTmw, async(req, res)=>{
+    try{
+        await deleteTask(req.body.taskid);
+        res.json({
+            success: true
+        })
+    }catch(error){
+        res.json({
+            success: false,
+            error: error
+        })
+    }
 });
 
 async function getTasks(userID){
@@ -224,16 +238,23 @@ async function newTask(){
 
 }
 
+async function deleteTask(taskid, userid){
+    if(taskid){
+        try {
+            await pool.query(sql`DELETE FROM tasks WHERE taskid=${taskid}`);
+        } catch (error) {
+            throw error;
+        }
+    }
+}
+
 async function updateTask(newTask){
     if(newTask.taskid){
         try {
-            var setVars = [];
-            var setString = "";
-            if(newTask.description !== -1 && newTask.description !== undefined) setVars.push(`description = ${newTask.description}`);
-            if(newTask.name !== -1 && newTask.name !== undefined) setVars.push(`name = ${newTask.name}`);
-            if(newTask.alarm !== -1 && newTask.alarm !== undefined) setVars.push(`alarm = ${newTask.alarm}`);
-            setString=setVars.join(', ');
-            await pool.query(sql`UPDATE tasks SET ${setString} WHERE taskid=${newTask.taskid};`);
+            if(!newTask.name) newTask.name = null;
+            if(!newTask.description) newTask.description = null;
+            if(!newTask.alarm) newTask.alarm = null;
+            await pool.query(sql`UPDATE tasks SET name = ${newTask.name}, description = ${newTask.description}, alarm = ${newTask.alarm} WHERE taskid=${newTask.taskid};`);
         } catch (error) {
             console.error(error);
             throw error;
