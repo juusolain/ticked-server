@@ -15,6 +15,7 @@ const secret = process.env.secret || crypto.randomBytes(128).toString('base64');
 const DB_URL = process.env.DATABASE_URL+'?ssl=1&rejectUnauthorized=true';
 const PORT = process.env.PORT || 5000;
 const isDev = true;
+const allowedDBrows = ['alarm', 'description', 'name'];
 
 //Setting up express
 const app = express();
@@ -251,22 +252,29 @@ async function deleteTask(taskid, userid){
 async function updateTask(newTask){
     if(newTask.taskid){
         try {
-            var setVars = [];
-            var setString = "";
-            for (const key in newTask) {
-                const item = newTask[key];
-                if(item !== -1 && item !== undefined && key !== 'taskid'){
-                    setVars.push(`${key} = ${item}`);
-                }
+
+            var queries = [];
+            if(newTask.name !== undefined){
+                queries.push(sql`name = ${newTask.name}`);
             }
-            if(setVars.length < 1){
+            if(newTask.description !== undefined){
+                queries.push(sql`description = ${newTask.description}`);
+            }
+            if(newTask.alarm !== undefined){
+                if(newTask.alarm === null){
+                    queries.push(sql`alarm = NULL`);
+                }else{
+                    queries.push(sql`alarm = ${newTask.alarm}`);
+                }
+                
+            }
+            if(queries.length < 1){
                 throw new Error('Trying to update with no changes');
             }
-            setString=setVars.join(', ');
-            await pool.query(sql`UPDATE tasks SET ${setString} WHERE taskid=${newTask.taskid};`);
+            await pool.query(sql`UPDATE tasks SET ${sql.join(queries, sql`, `)} WHERE taskid=${newTask.taskid};`);
         } catch (error) {
             console.error(error);
-            throw error;
+            throw new Error('Server database error');
         }
     }else{
         throw new Error('No task id');
