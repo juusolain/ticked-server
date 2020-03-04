@@ -15,6 +15,7 @@ const secret = process.env.secret || crypto.randomBytes(128).toString('base64');
 const DB_URL = process.env.DATABASE_URL+'?ssl=1&rejectUnauthorized=true';
 const PORT = process.env.PORT || 5000;
 const isDev = true;
+const allowedDBrows = ['alarm', 'description', 'name'];
 
 //Setting up express
 const app = express();
@@ -145,11 +146,11 @@ app.post('/register', async(req, res)=>{
 
 
 //Proper API
-app.get('/getTask/single', JWTmw, async(req, res)=>{
+app.post('/getTask/single', JWTmw, async(req, res)=>{
     await pool.maybeOne(); //Query task
 });
 
-app.get('/getTask/all', JWTmw, async(req, res)=>{
+app.post('/getTask/all', JWTmw, async(req, res)=>{
     try {
         const tasks = await getTasks(req.user.userid);
         res.json({
@@ -183,6 +184,10 @@ app.post('/newTask', JWTmw, async(req, res)=>{
     
 });
 
+app.post('/removeTask', JWTmw, async(req, res)=>{
+
+})
+
 app.post('/updateTask', JWTmw, async(req, res)=>{
     try {
         await updateTask(req.body);
@@ -198,8 +203,18 @@ app.post('/updateTask', JWTmw, async(req, res)=>{
     
 });
 
-app.post('/removeTask', JWTmw, async(req, res)=>{
-
+app.post('/deleteTask', JWTmw, async(req, res)=>{
+    try{
+        await deleteTask(req.body.taskid);
+        res.json({
+            success: true
+        })
+    }catch(error){
+        res.json({
+            success: false,
+            error: error
+        })
+    }
 });
 
 async function getTasks(userID){
@@ -224,25 +239,43 @@ async function newTask(){
 
 }
 
+async function deleteTask(taskid, userid){
+    if(taskid){
+        try {
+            await pool.query(sql`DELETE FROM tasks WHERE taskid=${taskid}`);
+        } catch (error) {
+            throw error;
+        }
+    }
+}
+
 async function updateTask(newTask){
     if(newTask.taskid){
         try {
-            if(!newTask.name) newTask.name = null
-            if(!newTask.description) newTask.description = null
-            if(newTask.description === -1 && newTask.name !== -1){//modify name
-                await pool.query(sql`UPDATE tasks SET name = ${newTask.name} WHERE taskid=${newTask.taskid};`);
-            }else if(newTask.name === -1 && newTask.description !== -1){//modify desc
-                await pool.query(sql`UPDATE tasks SET description = ${newTask.description} WHERE taskid=${newTask.taskid};`);
-            }else if(newTask.name !== -1 && newTask.description !== -1){ //modify all
-                await pool.query(sql`UPDATE tasks SET name = ${newTask.name}, description = ${newTask.description} WHERE taskid=${newTask.taskid};`);
-            }else{
-                throw new Error('Nothing to modify');
+
+            var queries = [];
+            if(newTask.name !== undefined){
+                queries.push(sql`name = ${newTask.name}`);
             }
+            if(newTask.description !== undefined){
+                queries.push(sql`description = ${newTask.description}`);
+            }
+            if(newTask.alarm !== undefined){
+                if(newTask.alarm === null){
+                    queries.push(sql`alarm = NULL`);
+                }else{
+                    queries.push(sql`alarm = ${newTask.alarm}`);
+                }
+                
+            }
+            if(queries.length < 1){
+                throw new Error('Trying to update with no changes');
+            }
+            await pool.query(sql`UPDATE tasks SET ${sql.join(queries, sql`, `)} WHERE taskid=${newTask.taskid};`);
         } catch (error) {
             console.error(error);
-            throw error;
+            throw new Error('Server database error');
         }
-
     }else{
         throw new Error('No task id');
     }
