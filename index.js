@@ -144,6 +144,20 @@ app.post('/register', async(req, res)=>{
     }
 });
 
+app.post('/getCategories', JWTmw, async(req, res)=>{
+    try {
+        const res = await getCategories(req.user.userid);
+        res.json({
+            success: true,
+            categories: res
+        });
+    } catch (error) {
+        res.json({
+            success: false,
+            error: error
+        });
+    }
+});
 
 //Proper API
 app.post('/getTask/single', JWTmw, async(req, res)=>{
@@ -152,7 +166,7 @@ app.post('/getTask/single', JWTmw, async(req, res)=>{
 
 app.post('/getTask/all', JWTmw, async(req, res)=>{
     try {
-        const tasks = await getTasks(req.user.userid);
+        const tasks = await getTasks(req.user.userid, req.body.categoryid);
         res.json({
             success: true,
             tasks: tasks
@@ -184,10 +198,6 @@ app.post('/newTask', JWTmw, async(req, res)=>{
     
 });
 
-app.post('/removeTask', JWTmw, async(req, res)=>{
-
-})
-
 app.post('/updateTask', JWTmw, async(req, res)=>{
     try {
         await updateTask(req.body);
@@ -200,7 +210,6 @@ app.post('/updateTask', JWTmw, async(req, res)=>{
             error: error
         });
     }
-    
 });
 
 app.post('/deleteTask', JWTmw, async(req, res)=>{
@@ -217,12 +226,27 @@ app.post('/deleteTask', JWTmw, async(req, res)=>{
     }
 });
 
-async function getTasks(userID){
+async function getTasks(userID, category){
+    try {
+        if(category){
+            const res = await pool.query(sql`SELECT * FROM tasks WHERE userid=${userID} AND category=${category};`);
+            return res.rows;
+        }else{
+            const res = await pool.query(sql`SELECT * FROM tasks WHERE userid=${userID};`);
+            return res.rows;
+        }
+    } catch (error) {
+        console.error(error);
+        throw new Error('Server database error');
+    }
+}
+
+async function getCategories(userID){
     try {
         const res = await pool.query(sql`SELECT * FROM tasks WHERE userid=${userID};`);
-        return res.rows;
     } catch (error) {
-        throw new Error('Internal server error');
+        console.error(error);
+        throw new Error('Server database error');
     }
 }
 
