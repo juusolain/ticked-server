@@ -290,7 +290,9 @@ async function updateTask(newTask){
                 }else{
                     queries.push(sql`alarm = ${newTask.alarm}`);
                 }
-                
+            }
+            if(newTask.subtasks !== undefined){
+                queries.push(sql`subtasks = ${sql.array(newTask.subtasks, sql`varchar(36)[]`)}`);
             }
             if(queries.length < 1){
                 throw new Error('Trying to update with no changes');
