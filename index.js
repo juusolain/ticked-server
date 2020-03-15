@@ -276,7 +276,6 @@ async function deleteTask(taskid, userid){
 async function updateTask(newTask){
     if(newTask.taskid){
         try {
-
             var queries = [];
             if(newTask.name !== undefined){
                 queries.push(sql`name = ${newTask.name}`);
