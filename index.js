@@ -15,7 +15,7 @@ const secret = process.env.secret || crypto.randomBytes(128).toString('base64');
 const DB_URL = process.env.DATABASE_URL+'?ssl=1&rejectUnauthorized=true';
 const PORT = process.env.PORT || 5000;
 const isDev = true;
-const allowedDBrows = ['alarm', 'description', 'name'];
+const allowedDBrows = ['alarm', 'description', 'name', 'listid'];
 
 //Setting up express
 const app = express();
@@ -144,14 +144,15 @@ app.post('/register', async(req, res)=>{
     }
 });
 
-app.post('/getCategories', JWTmw, async(req, res)=>{
+app.post('/getLists', JWTmw, async(req, res)=>{
     try {
-        const res = await getCategories(req.user.userid);
+        const lists = await getLists(req.user.userid);
         res.json({
             success: true,
-            categories: res
+            lists: lists
         });
     } catch (error) {
+        console.error(error)
         res.json({
             success: false,
             error: error
@@ -166,7 +167,7 @@ app.post('/getTask/single', JWTmw, async(req, res)=>{
 
 app.post('/getTask/all', JWTmw, async(req, res)=>{
     try {
-        const tasks = await getTasks(req.user.userid, req.body.categoryid);
+        const tasks = await getTasks(req.user.userid, req.body.listid);
         res.json({
             success: true,
             tasks: tasks
@@ -184,7 +185,7 @@ app.post('/newTask', JWTmw, async(req, res)=>{
     try {
         if(!name) name = null
         if(!description) description = null
-        const pgRes = await pool.query(sql`INSERT INTO tasks (userid, taskid, name, description) VALUES (${req.user.userid}, ${taskid}, ${name}, ${description})`);
+        const pgRes = await pool.query(sql`INSERT INTO tasks (userid, taskid, name, description, listid) VALUES (${req.user.userid}, ${taskid}, ${name}, ${description}, ${'test'})`);
         res.json({
             success: true
         });
@@ -226,14 +227,13 @@ app.post('/deleteTask', JWTmw, async(req, res)=>{
     }
 });
 
-async function getTasks(userID, category){
+async function getTasks(userID, listid){
     try {
-        if(category){
-            const res = await pool.query(sql`SELECT * FROM tasks WHERE userid=${userID} AND category=${category};`);
+        if(listid){
+            const res = await pool.query(sql`SELECT * FROM tasks WHERE userid=${userID} AND listid=${listid};`);
             return res.rows;
         }else{
-            const res = await pool.query(sql`SELECT * FROM tasks WHERE userid=${userID};`);
-            return res.rows;
+            return [];
         }
     } catch (error) {
         console.error(error);
@@ -241,9 +241,10 @@ async function getTasks(userID, category){
     }
 }
 
-async function getCategories(userID){
+async function getLists(userID){
     try {
-        const res = await pool.query(sql`SELECT * FROM tasks WHERE userid=${userID};`);
+        const res = await pool.query(sql`SELECT * FROM lists WHERE userid=${userID};`);
+        return res.rows;
     } catch (error) {
         console.error(error);
         throw new Error('Server database error');
