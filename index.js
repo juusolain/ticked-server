@@ -180,12 +180,15 @@ app.post('/getTask/all', JWTmw, async(req, res)=>{
 });
 
 app.post('/newTask', JWTmw, async(req, res)=>{
-    var {name, description} = req.body;
-    const taskid = uuid.v4();
+    var {name, description, taskid, listid, taskid} = req.body;
     try {
-        if(!name) name = null
-        if(!description) description = null
-        const pgRes = await pool.query(sql`INSERT INTO tasks (userid, taskid, name, description, listid) VALUES (${req.user.userid}, ${taskid}, ${name}, ${description}, ${'test'})`);
+        await newTask({
+            name: name,
+            description: description,
+            taskid: taskid,
+            listid: listid,
+            userid: req.user.userid
+        })
         res.json({
             success: true
         });
@@ -260,8 +263,8 @@ async function getTask(taskID){
     }
 }
 
-async function newTask(){
-
+async function newTask(task){
+    await pool.query(sql`INSERT INTO tasks (userid, taskid, name, description, listid) VALUES (${task.userid}, ${task.taskid}, ${task.name}, ${task.description}, ${task.listid})`);
 }
 
 async function deleteTask(taskid, userid){
