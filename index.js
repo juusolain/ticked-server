@@ -180,7 +180,7 @@ app.post('/getTask/all', JWTmw, async(req, res)=>{
 });
 
 app.post('/newTask', JWTmw, async(req, res)=>{
-    var {name, description, taskid, listid, taskid} = req.body;
+    var {name, description, taskid, listid} = req.body;
     try {
         await newTask({
             name: name,
