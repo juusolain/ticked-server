@@ -236,7 +236,8 @@ async function getTasks(userID, listid){
             const res = await pool.query(sql`SELECT * FROM tasks WHERE userid=${userID} AND listid=${listid};`);
             return res.rows;
         }else{
-            return [];
+            const res = await pool.query(sql`SELECT * FROM tasks WHERE userid=${userID};`);
+            return res.rows;
         }
     } catch (error) {
         console.error(error);
