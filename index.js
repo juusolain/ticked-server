@@ -236,7 +236,8 @@ async function getTasks(userID, listid){
             const res = await pool.query(sql`SELECT * FROM tasks WHERE userid=${userID} AND listid=${listid};`);
             return res.rows;
         }else{
-            return [];
+            const res = await pool.query(sql`SELECT * FROM tasks WHERE userid=${userID};`);
+            return res.rows;
         }
     } catch (error) {
         console.error(error);
@@ -264,7 +265,13 @@ async function getTask(taskID){
 }
 
 async function newTask(task){
-    await pool.query(sql`INSERT INTO tasks (userid, taskid, name, description, listid) VALUES (${task.userid}, ${task.taskid}, ${task.name}, ${task.description}, ${task.listid})`);
+    if(task.description === undefined) task.description = null
+    if(task.taskid && task.userid && task.listid && task.userid){
+        await pool.query(sql`INSERT INTO tasks (userid, taskid, name, description, listid) VALUES (${task.userid}, ${task.taskid}, ${task.name}, ${task.description}, ${task.listid})`);
+    }else{
+        throw 'Missing some params for task creation';
+    }
+    
 }
 
 async function deleteTask(taskid, userid){
