@@ -41,7 +41,7 @@ const JWTmw = expressJWT({
 //Setting up DB
 const cache = new NodeCache({
     checkperiod: 60,
-    stdTTL: 600, //10 minutes
+    stdTTL: 3600, //1 hour
     useClones: false,
 });
   
@@ -75,7 +75,16 @@ const pool = Slonik.createPool(DB_URL, {
 app.post('/login', async(req, res)=>{
     const {username, password} = req.body;
     try{
-        const pgReturn = await pool.maybeOne(sql`SELECT password, userid FROM users WHERE username = ${username}`); //Get password hash and userid by username
+        const pgReturn = await pool.maybeOne(sql`
+        -- @cache-ttl 600
+        SELECT 
+            password, 
+            userid
+        FROM 
+            users 
+        WHERE 
+            username = ${username}`
+        );
         if(pgReturn){
             if(await argon2.verify(pgReturn.password, password)){//Check password
                 let token = JWT.sign({ userid: pgReturn.userid, username: username }, secret, { expiresIn: 129600 }); // Sign JWT token
@@ -115,9 +124,22 @@ app.post('/register', async(req, res)=>{
     const userid = uuid.v4();
     try{
         const hashedPassword = await argon2.hash(password);
-        const pgReturn = await pool.maybeOne(sql`SELECT userid FROM users WHERE username = ${username}`); //Check if user exists
+        const pgReturn = await pool.maybeOne(sql`
+            -- @cache-ttl 600
+            SELECT
+                userid
+            FROM 
+                users 
+            WHERE 
+                username = ${username}`
+        ); //Check if user exists
         if(!pgReturn){//User doesnt exist
-            await pool.query(sql`INSERT INTO users (userid, password, username) VALUES (${userid}, ${hashedPassword}, ${username})`); //Insert
+            await pool.query(sql`
+                -- @cache-ttl 600
+                    INSERT INTO 
+                    users (userid, password, username) 
+                VALUES (${userid}, ${hashedPassword}, ${username})
+            `); //Insert
             let token = JWT.sign({ userid: userid, username: username }, secret, { expiresIn: 129600 }); // Sign JWT token
             res.json({
                 success: true,
