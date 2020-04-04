@@ -252,6 +252,32 @@ app.post('/deleteTask', JWTmw, async(req, res)=>{
     }
 });
 
+app.post('/sendKey', JWTmw, async(req, res)=>{
+    try {
+        setKey(req.user.userid, req.body.key)
+    } catch (error) {
+        res.json({
+            success: false,
+            error: 'Internal error'
+        })
+    }
+})
+
+app.post('/getKey', JWTmw, async(req,res)=>{
+    try {
+        const key = getKey(req.user.userid)
+        res.json({
+            success: true,
+            key: key
+        })
+    } catch (error) {
+        res.json({
+            success: false,
+            key: null
+        })
+    }
+})
+
 async function getTasks(userID, listid){
     try {
         if(listid){
@@ -341,6 +367,51 @@ async function updateTask(newTask){
 
 async function removeTask(){
 
+}
+
+async function setKey(userid, newKey){
+    try {
+        if(newKey){
+            await pool.query(sql`
+            UPDATE
+                users
+            SET
+                key = ${newKey}
+            WHERE
+                userid = ${userid}
+            `)
+        }else{
+            await pool.query(sql`
+            UPDATE
+                users
+            SET
+                key = NULL
+            WHERE
+                userid = ${userid}
+            `)
+        }
+        return true
+    } catch (error) {
+        console.error(error)
+        throw error
+    }
+}
+
+async function getKey(userid){
+    try {
+        const res = await pool.query(sql`
+            SELECT
+                key
+            FROM
+                users
+            WHERE
+                userid = ${userid}
+        `)
+        console.log(res)
+    } catch (error) {
+        console.error(error)
+        throw error
+    }
 }
 
 //Error middleware
