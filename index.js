@@ -255,6 +255,9 @@ app.post('/deleteTask', JWTmw, async(req, res)=>{
 app.post('/sendKey', JWTmw, async(req, res)=>{
     try {
         setKey(req.user.userid, req.body.key)
+        res.json({
+            success: true
+        })
     } catch (error) {
         res.json({
             success: false,
@@ -265,10 +268,10 @@ app.post('/sendKey', JWTmw, async(req, res)=>{
 
 app.post('/getKey', JWTmw, async(req,res)=>{
     try {
-        const key = getKey(req.user.userid)
+        const resData = await getKey(req.user.userid)
         res.json({
             success: true,
-            key: key
+            key: resData.key
         })
     } catch (error) {
         res.json({
@@ -407,7 +410,8 @@ async function getKey(userid){
             WHERE
                 userid = ${userid}
         `)
-        console.log(res)
+        console.log(res.rows[0])
+        return res.rows[0]
     } catch (error) {
         console.error(error)
         throw error
