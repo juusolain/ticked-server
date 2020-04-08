@@ -28,5 +28,17 @@
     "slonik": "^22.4.3",
     "slonik-interceptor-query-cache": "^2.0.1",
     "uuid": "^7.0.0"
+  },
+  "deploy-node-app": {
+    "prod": {
+      "entrypoint": "index.js",
+      "context": "kubesail-jusola",
+      "registry": "index.docker.io/v1/",
+      "type": "server",
+      "port": 443,
+      "protocol": "https",
+      "registryUsername": "jusola",
+      "isPublic": false
+    }
   }
 }
