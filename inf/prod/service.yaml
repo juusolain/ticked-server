@@ -5,8 +5,8 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-    - name: tcp
-      port: 443
+    - name: http
+      port: 5000
       protocol: TCP
       targetPort: 5000
   selector:

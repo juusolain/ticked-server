@@ -76,6 +76,10 @@ const pool = Slonik.createPool(DB_URL, {
     connectionTimeout: 15000,
 });
 
+//Sample response
+app.get('/', (req, res)=>{
+    res.send('Ticked-server test response')
+})
 
 //Login
 app.post('/login', async(req, res)=>{
