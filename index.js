@@ -15,6 +15,7 @@ const secret = process.env.secret || crypto.randomBytes(128).toString('base64');
 const DB_URL = process.env.DATABASE_URL+'?ssl=1&rejectUnauthorized=true';
 const PORT = process.env.PORT || 5000;
 const isDev = true;
+console.log(process.env)
 const allowedDBrows = ['alarm', 'description', 'name', 'listid'];
 
 //Setting up express

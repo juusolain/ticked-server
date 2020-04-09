@@ -1,0 +1,6 @@
+bases:
+  - ../../node_modules/@metamodules/postgres
+resources:
+  - secrets\postgres-secret.yaml
+  - deployment.yaml
+  - service.yaml
