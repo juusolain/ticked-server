@@ -12,10 +12,16 @@ import uuid from 'uuid';
 
 //Config
 const secret = process.env.secret || crypto.randomBytes(128).toString('base64'); //get secret from env or generate new, possibly dangerous, but better than using pre-defined secret
-const DB_URL = process.env.DATABASE_URL+'?ssl=1&rejectUnauthorized=true';
+const DB_USER = process.env.POSTGRES_USER || 'postgres'
+const DB_PASS = process.env.POSTGRES_PASSWORD || 'postgres'
+const DB_NAME = process.env.POSTGRES_DB || 'postgres'
+const DB_HOST = process.env.POSTGRES_SERVICE_HOST || 'localhost'
+const DB_PORT = process.env.POSTGRES_SERVICE_PORT || 5432
+const DB_URL = `postgresql://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}$?ssl=1&rejectUnauthorized=true`;
 const PORT = process.env.PORT || 5000;
 const isDev = true;
-const allowedDBrows = ['alarm', 'description', 'name'];
+console.log(process.env)
+const allowedDBrows = ['alarm', 'description', 'name', 'listid'];
 
 //Setting up express
 const app = express();
@@ -41,7 +47,7 @@ const JWTmw = expressJWT({
 //Setting up DB
 const cache = new NodeCache({
     checkperiod: 60,
-    stdTTL: 600, //10 minutes
+    stdTTL: 3600, //1 hour
     useClones: false,
 });
   
@@ -70,12 +76,25 @@ const pool = Slonik.createPool(DB_URL, {
     connectionTimeout: 15000,
 });
 
+//Sample response
+app.get('/', (req, res)=>{
+    res.send('Ticked-server test response')
+})
 
 //Login
 app.post('/login', async(req, res)=>{
     const {username, password} = req.body;
     try{
-        const pgReturn = await pool.maybeOne(sql`SELECT password, userid FROM users WHERE username = ${username}`); //Get password hash and userid by username
+        const pgReturn = await pool.maybeOne(sql`
+        -- @cache-ttl 600
+        SELECT 
+            password, 
+            userid
+        FROM 
+            users 
+        WHERE 
+            username = ${username}`
+        );
         if(pgReturn){
             if(await argon2.verify(pgReturn.password, password)){//Check password
                 let token = JWT.sign({ userid: pgReturn.userid, username: username }, secret, { expiresIn: 129600 }); // Sign JWT token
@@ -115,9 +134,22 @@ app.post('/register', async(req, res)=>{
     const userid = uuid.v4();
     try{
         const hashedPassword = await argon2.hash(password);
-        const pgReturn = await pool.maybeOne(sql`SELECT userid FROM users WHERE username = ${username}`); //Check if user exists
+        const pgReturn = await pool.maybeOne(sql`
+            -- @cache-ttl 600
+            SELECT
+                userid
+            FROM 
+                users 
+            WHERE 
+                username = ${username}`
+        ); //Check if user exists
         if(!pgReturn){//User doesnt exist
-            await pool.query(sql`INSERT INTO users (userid, password, username) VALUES (${userid}, ${hashedPassword}, ${username})`); //Insert
+            await pool.query(sql`
+                -- @cache-ttl 600
+                    INSERT INTO 
+                    users (userid, password, username) 
+                VALUES (${userid}, ${hashedPassword}, ${username})
+            `); //Insert
             let token = JWT.sign({ userid: userid, username: username }, secret, { expiresIn: 129600 }); // Sign JWT token
             res.json({
                 success: true,
@@ -144,6 +176,21 @@ app.post('/register', async(req, res)=>{
     }
 });
 
+app.post('/getLists', JWTmw, async(req, res)=>{
+    try {
+        const lists = await getLists(req.user.userid);
+        res.json({
+            success: true,
+            lists: lists
+        });
+    } catch (error) {
+        console.error(error)
+        res.json({
+            success: false,
+            error: error
+        });
+    }
+});
 
 //Proper API
 app.post('/getTask/single', JWTmw, async(req, res)=>{
@@ -152,7 +199,7 @@ app.post('/getTask/single', JWTmw, async(req, res)=>{
 
 app.post('/getTask/all', JWTmw, async(req, res)=>{
     try {
-        const tasks = await getTasks(req.user.userid);
+        const tasks = await getTasks(req.user.userid, req.body.listid);
         res.json({
             success: true,
             tasks: tasks
@@ -165,12 +212,15 @@ app.post('/getTask/all', JWTmw, async(req, res)=>{
 });
 
 app.post('/newTask', JWTmw, async(req, res)=>{
-    var {name, description} = req.body;
-    const taskid = uuid.v4();
+    var {name, description, taskid, listid} = req.body;
     try {
-        if(!name) name = null
-        if(!description) description = null
-        const pgRes = await pool.query(sql`INSERT INTO tasks (userid, taskid, name, description) VALUES (${req.user.userid}, ${taskid}, ${name}, ${description})`);
+        await newTask({
+            name: name,
+            description: description,
+            taskid: taskid,
+            listid: listid,
+            userid: req.user.userid
+        })
         res.json({
             success: true
         });
@@ -184,10 +234,6 @@ app.post('/newTask', JWTmw, async(req, res)=>{
     
 });
 
-app.post('/removeTask', JWTmw, async(req, res)=>{
-
-})
-
 app.post('/updateTask', JWTmw, async(req, res)=>{
     try {
         await updateTask(req.body);
@@ -200,7 +246,6 @@ app.post('/updateTask', JWTmw, async(req, res)=>{
             error: error
         });
     }
-    
 });
 
 app.post('/deleteTask', JWTmw, async(req, res)=>{
@@ -217,12 +262,57 @@ app.post('/deleteTask', JWTmw, async(req, res)=>{
     }
 });
 
-async function getTasks(userID){
+app.post('/sendKey', JWTmw, async(req, res)=>{
     try {
-        const res = await pool.query(sql`SELECT * FROM tasks WHERE userid=${userID};`);
+        setKey(req.user.userid, req.body.key)
+        res.json({
+            success: true
+        })
+    } catch (error) {
+        res.json({
+            success: false,
+            error: 'Internal error'
+        })
+    }
+})
+
+app.post('/getKey', JWTmw, async(req,res)=>{
+    try {
+        const resData = await getKey(req.user.userid)
+        res.json({
+            success: true,
+            key: resData.key
+        })
+    } catch (error) {
+        res.json({
+            success: false,
+            key: null
+        })
+    }
+})
+
+async function getTasks(userID, listid){
+    try {
+        if(listid){
+            const res = await pool.query(sql`SELECT * FROM tasks WHERE userid=${userID} AND listid=${listid};`);
+            return res.rows;
+        }else{
+            const res = await pool.query(sql`SELECT * FROM tasks WHERE userid=${userID};`);
+            return res.rows;
+        }
+    } catch (error) {
+        console.error(error);
+        throw new Error('Server database error');
+    }
+}
+
+async function getLists(userID){
+    try {
+        const res = await pool.query(sql`SELECT * FROM lists WHERE userid=${userID};`);
         return res.rows;
     } catch (error) {
-        throw new Error('Internal server error');
+        console.error(error);
+        throw new Error('Server database error');
     }
 }
 
@@ -235,8 +325,14 @@ async function getTask(taskID){
     }
 }
 
-async function newTask(){
-
+async function newTask(task){
+    if(task.description === undefined) task.description = null
+    if(task.taskid && task.userid && task.listid && task.userid){
+        await pool.query(sql`INSERT INTO tasks (userid, taskid, name, description, listid) VALUES (${task.userid}, ${task.taskid}, ${task.name}, ${task.description}, ${task.listid})`);
+    }else{
+        throw 'Missing some params for task creation';
+    }
+    
 }
 
 async function deleteTask(taskid, userid){
@@ -252,7 +348,6 @@ async function deleteTask(taskid, userid){
 async function updateTask(newTask){
     if(newTask.taskid){
         try {
-
             var queries = [];
             if(newTask.name !== undefined){
                 queries.push(sql`name = ${newTask.name}`);
@@ -266,7 +361,9 @@ async function updateTask(newTask){
                 }else{
                     queries.push(sql`alarm = ${newTask.alarm}`);
                 }
-                
+            }
+            if(newTask.subtasks !== undefined){
+                queries.push(sql`subtasks = ${sql.array(newTask.subtasks, sql`varchar(36)[]`)}`);
             }
             if(queries.length < 1){
                 throw new Error('Trying to update with no changes');
@@ -283,6 +380,52 @@ async function updateTask(newTask){
 
 async function removeTask(){
 
+}
+
+async function setKey(userid, newKey){
+    try {
+        if(newKey){
+            await pool.query(sql`
+            UPDATE
+                users
+            SET
+                key = ${newKey}
+            WHERE
+                userid = ${userid}
+            `)
+        }else{
+            await pool.query(sql`
+            UPDATE
+                users
+            SET
+                key = NULL
+            WHERE
+                userid = ${userid}
+            `)
+        }
+        return true
+    } catch (error) {
+        console.error(error)
+        throw error
+    }
+}
+
+async function getKey(userid){
+    try {
+        const res = await pool.query(sql`
+            SELECT
+                key
+            FROM
+                users
+            WHERE
+                userid = ${userid}
+        `)
+        console.log(res.rows[0])
+        return res.rows[0]
+    } catch (error) {
+        console.error(error)
+        throw error
+    }
 }
 
 //Error middleware
