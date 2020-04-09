@@ -34,11 +34,11 @@ spec:
           env:
             - name: GET_HOSTS_FROM
               value: dns
-            - name: DB_USER
-              valueFrom:
-                secretKeyRef:
-                  name: postgres
-                  key: POSTGRES_USER  
+            - name: 'TEST_ENV'
+              value: 'TEST_ENVINRONMENT_VALUE'
+          envFrom:
+          - secretRef:
+              name: postgres
           ports:
             - containerPort: 5000
               name: http
@@ -53,9 +53,6 @@ spec:
           command:
             - node
             - index.js
-          envFrom:
-            - secretRef:
-                name: postgres
       imagePullSecrets:
         - name: regcred
       restartPolicy: Always

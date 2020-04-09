@@ -12,7 +12,12 @@ import uuid from 'uuid';
 
 //Config
 const secret = process.env.secret || crypto.randomBytes(128).toString('base64'); //get secret from env or generate new, possibly dangerous, but better than using pre-defined secret
-const DB_URL = process.env.DATABASE_URL+'?ssl=1&rejectUnauthorized=true';
+const DB_USER = process.env.POSTGRES_USER || 'postgres'
+const DB_PASS = process.env.POSTGRES_PASSWORD || 'postgres'
+const DB_NAME = process.env.POSTGRES_DB || 'postgres'
+const DB_HOST = process.env.POSTGRES_SERVICE_HOST || 'localhost'
+const DB_PORT = process.env.POSTGRES_SERVICE_PORT || 5432
+const DB_URL = `postgresql://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}$?ssl=1&rejectUnauthorized=true`;
 const PORT = process.env.PORT || 5000;
 const isDev = true;
 console.log(process.env)
