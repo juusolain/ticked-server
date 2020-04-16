@@ -1,5 +1,5 @@
 bases:
-  - ../../node_modules/@metamodules/postgres
+  - postgres
 resources:
   - secrets\postgres-secret.yaml
   - ingress.yaml

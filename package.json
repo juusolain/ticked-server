@@ -18,7 +18,6 @@
   },
   "homepage": "https://github.com/jusola/ticked-server#readme",
   "dependencies": {
-    "@metamodules/postgres": "^1.2.1",
     "argon2": "^0.26.2",
     "body-parser": "^1.19.0",
     "cors": "^2.8.5",
