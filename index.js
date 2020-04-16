@@ -20,6 +20,8 @@ const DB_PORT = process.env.POSTGRES_SERVICE_PORT || 5432
 const DB_URL = `postgres://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}`;
 const PORT = process.env.PORT || 5000;
 const isDev = true;
+console.log(process.env)
+console.log(DB_URL)
 const allowedDBrows = ['alarm', 'description', 'name', 'listid'];
 
 //Setting up express

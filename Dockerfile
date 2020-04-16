@@ -10,6 +10,8 @@ ENV NODE_ENV="production"
 RUN chown -R node /app /home/node && \
   rm -rf /var/lib/apt/lists/*
 
+RUN apk add --no-cache bash
+
 USER node
 
 COPY package.json yarn.loc[k] package-lock.jso[n] /app/
