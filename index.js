@@ -17,11 +17,9 @@ const DB_PASS = process.env.POSTGRES_PASSWORD || 'postgres'
 const DB_NAME = process.env.POSTGRES_DB || 'postgres'
 const DB_HOST = process.env.POSTGRES_SERVICE_HOST || 'localhost'
 const DB_PORT = process.env.POSTGRES_SERVICE_PORT || 5432
-const DB_URL = `postgres://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}`;
+const DB_URL = process.env.DATABASE_URL || `postgres://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}`;
 const PORT = process.env.PORT || 5000;
 const isDev = true;
-console.log(process.env)
-console.log(DB_URL)
 const allowedDBrows = ['alarm', 'description', 'name', 'listid'];
 
 //Setting up express
@@ -112,14 +110,15 @@ app.post('/login', async(req, res)=>{
                 });
             }
         }else{//Invalid query (incorrect userid)
+            console.log("Notfound")
             res.json({
                 success: false,
                 token: null,
                 err: 'Username or password is incorrect'
             });
         }
-    }
-    catch(err){//Something broke
+    }catch(err){//Something broke
+        console.log("Internal error")
         console.error(err);
         res.json({
             success: false,
@@ -193,7 +192,26 @@ app.post('/getLists', JWTmw, async(req, res)=>{
     }
 });
 
-//Proper API
+app.post('/newList', JWTmw, async(req, res)=>{
+    var {name, listid} = req.body;
+    try {
+        await newList({
+            name: name,
+            listid: listid,
+            userid: req.user.userid
+        })
+        res.json({
+            success: true
+        });
+    } catch (error) {
+        res.json({
+            success: false,
+            error: "Internal server error"
+        });
+        console.error(error);
+    }
+})
+
 app.post('/getTask/single', JWTmw, async(req, res)=>{
     await pool.maybeOne(); //Query task
 });
@@ -232,7 +250,6 @@ app.post('/newTask', JWTmw, async(req, res)=>{
         });
         console.error(error);
     }
-    
 });
 
 app.post('/updateTask', JWTmw, async(req, res)=>{
@@ -317,6 +334,14 @@ async function getLists(userID){
     }
 }
 
+async function newList(list){
+    if(list.listid && list.userid && list.name){
+        await pool.query(sql`INSERT INTO lists (userid, name, listid) VALUES (${task.userid}, ${task.name}, ${list.listid})`);
+    }else{
+        throw 'Missing some params for list creation';
+    }
+}
+
 async function getTask(taskID){
     //Not implemented, for debug
     return {
@@ -333,7 +358,6 @@ async function newTask(task){
     }else{
         throw 'Missing some params for task creation';
     }
-    
 }
 
 async function deleteTask(taskid, userid){

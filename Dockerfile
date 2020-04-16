@@ -10,7 +10,7 @@ ENV NODE_ENV="production"
 RUN chown -R node /app /home/node && \
   rm -rf /var/lib/apt/lists/*
 
-RUN apk add --no-cache bash
+RUN apk add --no-cache bash postgresql-client
 
 USER node
 
