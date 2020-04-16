@@ -17,7 +17,7 @@ const DB_PASS = process.env.POSTGRES_PASSWORD || 'postgres'
 const DB_NAME = process.env.POSTGRES_DB || 'postgres'
 const DB_HOST = process.env.POSTGRES_SERVICE_HOST || 'localhost'
 const DB_PORT = process.env.POSTGRES_SERVICE_PORT || 5432
-const DB_URL = `postgresql://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}$?ssl=1&rejectUnauthorized=true`;
+const DB_URL = `postgresql://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}`;
 const PORT = process.env.PORT || 5000;
 const isDev = true;
 console.log(process.env)
