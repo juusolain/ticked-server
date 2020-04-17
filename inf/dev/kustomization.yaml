@@ -1,0 +1,7 @@
+bases:
+  - postgres
+resources:
+  - secrets\postgres-secret.yaml
+  - ingress.yaml
+  - deployment.yaml
+  - service.yaml
