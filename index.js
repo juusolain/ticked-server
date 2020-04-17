@@ -83,6 +83,13 @@ app.get('/', (req, res)=>{
 //Login
 app.post('/login', async(req, res)=>{
     const {username, password} = req.body;
+    if(!username || !password){
+        res.json({
+            success: false,
+            token: null,
+            err: 'error.login.invalidquery'
+        });
+    }                 
     try{
         const pgReturn = await pool.maybeOne(sql`
         -- @cache-ttl 600
@@ -106,15 +113,14 @@ app.post('/login', async(req, res)=>{
                 res.json({
                     success: false,
                     token: null,
-                    err: 'Username or password is incorrect'
+                    err: 'error.login.invalidlogin'
                 });
             }
-        }else{//Invalid query (incorrect userid)
-            console.log("Notfound")
+        }else{
             res.json({
                 success: false,
                 token: null,
-                err: 'Username or password is incorrect'
+                err: 'error.login.invalidlogin'
             });
         }
     }catch(err){//Something broke
@@ -123,7 +129,7 @@ app.post('/login', async(req, res)=>{
         res.json({
             success: false,
             token: null,
-            err: 'Internal server error'
+            err: 'error.servererror'
         });
     }
 });
@@ -166,7 +172,7 @@ app.post('/register', async(req, res)=>{
             res.json({
                 success: false,
                 token: null,
-                err: 'User already exists'
+                err: 'error.register.usernameexists'
             });
         }
     }
@@ -175,7 +181,7 @@ app.post('/register', async(req, res)=>{
         res.json({
             success: false,
             token: null,
-            err: 'Internal server error'
+            err: 'error.servererror'
         });
     }
 });
@@ -185,13 +191,14 @@ app.post('/getLists', JWTmw, async(req, res)=>{
         const lists = await getLists(req.user.userid);
         res.json({
             success: true,
-            lists: lists
+            lists: lists,
+            err: null
         });
     } catch (error) {
         console.error(error)
         res.json({
             success: false,
-            error: error
+            err: error
         });
     }
 });
@@ -210,9 +217,8 @@ app.post('/newList', JWTmw, async(req, res)=>{
     } catch (error) {
         res.json({
             success: false,
-            error: "Internal server error"
+            err: err
         });
-        console.error(error);
     }
 })
 
@@ -229,7 +235,8 @@ app.post('/getTask/all', JWTmw, async(req, res)=>{
         })
     } catch (error) {
         res.json({
-            success: false
+            success: false,
+            err: error
         })
     }
 });
@@ -250,9 +257,8 @@ app.post('/newTask', JWTmw, async(req, res)=>{
     } catch (error) {
         res.json({
             success: false,
-            error: "Internal server error"
+            err: err
         });
-        console.error(error);
     }
 });
 
@@ -265,7 +271,7 @@ app.post('/updateTask', JWTmw, async(req, res)=>{
     } catch (error) {
         res.json({
             success: false,
-            error: error
+            err: err
         });
     }
 });
@@ -279,60 +285,29 @@ app.post('/deleteTask', JWTmw, async(req, res)=>{
     }catch(error){
         res.json({
             success: false,
-            error: error
+            err: err
         })
     }
 });
 
-app.post('/sendKey', JWTmw, async(req, res)=>{
-    try {
-        setKey(req.user.userid, req.body.key)
-        res.json({
-            success: true
-        })
-    } catch (error) {
-        res.json({
-            success: false,
-            error: 'Internal error'
-        })
-    }
-})
-
-app.post('/getKey', JWTmw, async(req,res)=>{
-    try {
-        const resData = await getKey(req.user.userid)
-        res.json({
-            success: true,
-            key: resData.key
-        })
-    } catch (error) {
-        res.json({
-            success: false,
-            key: null
-        })
-    }
-})
-
 async function initUser(user) {
+    if(!user.username || !user.userid) throw 'error.queryerror'
     try {
-        if(user.username && user.userid){
-            await pool.query(sql`
-            INSERT INTO
-                lists
-                (listid, userid, name)
-            VALUES 
-                ('trash', ${user.userid}, 'Trash')
-            `);
-            return true;
-        }else{
-            return false;
-        }
+        await pool.query(sql`
+        INSERT INTO
+            lists
+            (listid, userid, name)
+        VALUES 
+            ('trash', ${user.userid}, 'Trash')
+        `);
     } catch (error) {
         console.error(error)
+        throw 'error.servererror'
     }
 }
 
 async function getTasks(userID, listid){
+    if(!userid) throw 'error.getTasks.queryerror'
     try {
         if(listid){
             const res = await pool.query(sql`SELECT * FROM tasks WHERE userid=${userID} AND listid=${listid};`);
@@ -343,25 +318,31 @@ async function getTasks(userID, listid){
         }
     } catch (error) {
         console.error(error);
-        throw new Error('Server database error');
+        throw 'error.servererror'
     }
 }
 
 async function getLists(userID){
+    if(!userid) throw 'error.getLists.queryerror'
     try {
         const res = await pool.query(sql`SELECT * FROM lists WHERE userid=${userID};`);
         return res.rows;
     } catch (error) {
         console.error(error);
-        throw new Error('Server database error');
+        throw 'error.servererror'
     }
 }
 
 async function newList(list){
     if(list.listid && list.userid && list.name){
-        await pool.query(sql`INSERT INTO lists (userid, name, listid) VALUES (${task.userid}, ${task.name}, ${list.listid})`);
+        try {
+            await pool.query(sql`INSERT INTO lists (userid, name, listid) VALUES (${task.userid}, ${task.name}, ${list.listid})`);
+        } catch (error) {
+            console.error(error)
+            throw 'error.servererror'
+        }
     }else{
-        throw 'Missing some params for list creation';
+        throw 'error.newlist.invalidquery';
     }
 }
 
@@ -377,9 +358,14 @@ async function getTask(taskID){
 async function newTask(task){
     if(task.description === undefined) task.description = null
     if(task.taskid && task.userid && task.listid && task.userid){
-        await pool.query(sql`INSERT INTO tasks (userid, taskid, name, description, listid) VALUES (${task.userid}, ${task.taskid}, ${task.name}, ${task.description}, ${task.listid})`);
+        try {
+            await pool.query(sql`INSERT INTO tasks (userid, taskid, name, description, listid) VALUES (${task.userid}, ${task.taskid}, ${task.name}, ${task.description}, ${task.listid})`);
+        } catch (error) {
+            console.error(error)
+            throw 'error.servererror'
+        }
     }else{
-        throw 'Missing some params for task creation';
+        throw 'error.newtask.invalidquery';
     }
 }
 
@@ -388,8 +374,10 @@ async function deleteTask(taskid, userid){
         try {
             await pool.query(sql`DELETE FROM tasks WHERE taskid=${taskid}`);
         } catch (error) {
-            throw error;
+            throw 'error.servererror';
         }
+    }else{
+        throw 'error.deletetask.queryerror'
     }
 }
 
@@ -414,15 +402,15 @@ async function updateTask(newTask){
                 queries.push(sql`subtasks = ${sql.array(newTask.subtasks, sql`varchar(36)[]`)}`);
             }
             if(queries.length < 1){
-                throw new Error('Trying to update with no changes');
+                throw 'error.updatetask.nochanges';
             }
             await pool.query(sql`UPDATE tasks SET ${sql.join(queries, sql`, `)} WHERE taskid=${newTask.taskid};`);
         } catch (error) {
             console.error(error);
-            throw new Error('Server database error');
+            throw 'error.servererror'
         }
     }else{
-        throw new Error('No task id');
+        throw 'error.updatetask.invalidquery'
     }
 }
 
@@ -478,9 +466,12 @@ async function getKey(userid){
 
 //Error middleware
 app.use(function (err, req, res, next) {
-    if (err.name === 'UnauthorizedError') { // Invalid token, lets log as invalidToken
+    if (err.name === 'UnauthorizedError') { // Invalid token, lets log as
         console.warn('Invalid token', err);
-        res.status(401).send(err);
+        res.send({
+            success: false,
+            err: 'error.invalidtoken'
+        })
     }
     else {
         next(err);
