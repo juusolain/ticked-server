@@ -156,6 +156,10 @@ app.post('/register', async(req, res)=>{
                 err: null,
                 token: token,
             });
+            await initUser({
+                userid: userid, 
+                username: username
+            })
             if (isDev) console.log(`User registered ${username}: ${token}`);
         }else{
             if (process.env.NODE_ENV == 'development') console.log(`User already exists`);
@@ -308,6 +312,25 @@ app.post('/getKey', JWTmw, async(req,res)=>{
         })
     }
 })
+
+async function initUser(user) {
+    try {
+        if(user.username && user.userid){
+            await pool.query(sql`
+            INSERT INTO
+                lists
+                (listid, userid, name)
+            VALUES 
+                ('trash', ${user.userid}, 'Trash')
+            `);
+            return true;
+        }else{
+            return false;
+        }
+    } catch (error) {
+        console.error(error)
+    }
+}
 
 async function getTasks(userID, listid){
     try {
