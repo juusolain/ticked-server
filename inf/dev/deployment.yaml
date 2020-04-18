@@ -36,7 +36,7 @@ spec:
               value: dns
           envFrom:
           - secretRef:
-              name: postgres
+              name: secret
           ports:
             - containerPort: 5000
               name: http

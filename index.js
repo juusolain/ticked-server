@@ -10,8 +10,11 @@ import crypto from 'crypto';
 import argon2 from 'argon2';
 import uuid from 'uuid';
 
+import Payments from './payments'
+
 //Config
 const secret = process.env.secret || crypto.randomBytes(128).toString('base64'); //get secret from env or generate new, possibly dangerous, but better than using pre-defined secret
+const STRIPE_KEY = process.env.STRIPE_KEY
 const DB_USER = process.env.POSTGRES_USER || 'postgres'
 const DB_PASS = process.env.POSTGRES_PASSWORD || 'postgres'
 const DB_NAME = process.env.POSTGRES_DB || 'postgres'
@@ -21,6 +24,8 @@ const DB_URL = process.env.DATABASE_URL || `postgres://${DB_USER}:${DB_PASS}@${D
 const PORT = process.env.PORT || 5000;
 const isDev = true;
 const allowedDBrows = ['alarm', 'description', 'name', 'listid'];
+
+const payments = new Payments(STRIPE_KEY)
 
 //Setting up express
 const app = express();
