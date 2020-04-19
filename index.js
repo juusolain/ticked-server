@@ -312,7 +312,9 @@ async function initUser(user) {
 }
 
 async function getTasks(userID, listid){
-    if(!userid) throw 'error.getTasks.queryerror'
+    if(!userID) {
+        throw 'error.getTasks.queryerror'
+    }
     try {
         if(listid){
             const res = await pool.query(sql`SELECT * FROM tasks WHERE userid=${userID} AND listid=${listid};`);
@@ -328,7 +330,7 @@ async function getTasks(userID, listid){
 }
 
 async function getLists(userID){
-    if(!userid) throw 'error.getLists.queryerror'
+    if(!userID) throw 'error.getLists.queryerror'
     try {
         const res = await pool.query(sql`SELECT * FROM lists WHERE userid=${userID};`);
         return res.rows;
