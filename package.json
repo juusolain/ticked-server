@@ -27,6 +27,7 @@
     "node-cache": "^5.1.0",
     "slonik": "^22.4.3",
     "slonik-interceptor-query-cache": "^2.0.1",
+    "stripe": "^8.44.0",
     "uuid": "^7.0.0"
   },
   "deploy-node-app": {

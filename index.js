@@ -10,7 +10,7 @@ import crypto from 'crypto';
 import argon2 from 'argon2';
 import uuid from 'uuid';
 
-import Payments from './payments'
+import Payments from './payments.js'
 
 //Config
 const secret = process.env.secret || crypto.randomBytes(128).toString('base64'); //get secret from env or generate new, possibly dangerous, but better than using pre-defined secret
@@ -341,7 +341,7 @@ async function getLists(userID){
 async function newList(list){
     if(list.listid && list.userid && list.name){
         try {
-            await pool.query(sql`INSERT INTO lists (userid, name, listid) VALUES (${task.userid}, ${task.name}, ${list.listid})`);
+            await pool.query(sql`INSERT INTO lists (userid, name, listid) VALUES (${list.userid}, ${list.name}, ${list.listid})`);
         } catch (error) {
             console.error(error)
             throw 'error.servererror'
