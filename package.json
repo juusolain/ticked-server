@@ -5,7 +5,15 @@
   "description": "Server for ticked",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "docker:build:dev": "docker build . -t jusola/ticked:next",
+    "docker:build": "docker build . -t jusola/ticked:latest",
+    "docker:push:dev": "docker push jusola/ticked:next",
+    "docker:push": "docker push jusola/ticked:latest",
+    "docker:deploy:dev": "npm run docker:build:dev && npm run docker:push:dev",
+    "docker:deploy": "npm rum docker:build && npm run docker:push",
+    "kube:apply": "kubectl apply -k inf/prod --context='kubesail-jusola'",
+    "kube:apply:dev": "kubectl apply -k inf/prod --context='docker-desktop'"
   },
   "repository": {
     "type": "git",
@@ -29,27 +37,5 @@
     "slonik-interceptor-query-cache": "^2.0.1",
     "stripe": "^8.44.0",
     "uuid": "^7.0.0"
-  },
-  "deploy-node-app": {
-    "prod": {
-      "entrypoint": "index.js",
-      "context": "kubesail-jusola",
-      "registry": "index.docker.io/v1/",
-      "type": "server",
-      "port": 443,
-      "protocol": "https",
-      "registryUsername": "jusola",
-      "isPublic": false
-    },
-    "local": {
-      "entrypoint": "index.js",
-      "context": "kubesail-jusola",
-      "registry": "index.docker.io/v1/",
-      "type": "server",
-      "port": 443,
-      "protocol": "https",
-      "registryUsername": "jusola",
-      "isPublic": false
-    }
   }
 }
