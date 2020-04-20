@@ -11,9 +11,11 @@
     "docker:push:dev": "docker push jusola/ticked:next",
     "docker:push": "docker push jusola/ticked:latest",
     "docker:deploy:dev": "npm run docker:build:dev && npm run docker:push:dev",
-    "docker:deploy": "npm rum docker:build && npm run docker:push",
+    "docker:deploy": "npm run docker:build && npm run docker:push",
     "kube:apply": "kubectl apply -k inf/prod --context=\"kubesail-jusola\"",
-    "kube:apply:dev": "kubectl apply -k inf/dev --context=\"docker-desktop\""
+    "kube:apply:dev": "kubectl apply -k inf/dev --context=\"docker-desktop\"",
+    "deploy:dev": "npm run docker:deploy:dev && npm run kube:apply:dev",
+    "deploy": "npm run docker:deploy && npm run kube:apply"
   },
   "repository": {
     "type": "git",

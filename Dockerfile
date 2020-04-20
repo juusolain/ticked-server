@@ -1,4 +1,4 @@
-FROM node:13.12-alpine
+FROM node:12-alpine
 
 # Built by deploy-node-app
 

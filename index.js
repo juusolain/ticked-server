@@ -259,7 +259,7 @@ app.post('/newTask', JWTmw, async(req, res)=>{
         res.json({
             success: true
         });
-    } catch (error) {
+    } catch (err) {
         res.json({
             success: false,
             err: err
@@ -273,7 +273,7 @@ app.post('/updateTask', JWTmw, async(req, res)=>{
         res.json({
             success: true,
         });
-    } catch (error) {
+    } catch (err) {
         res.json({
             success: false,
             err: err
@@ -287,7 +287,7 @@ app.post('/deleteTask', JWTmw, async(req, res)=>{
         res.json({
             success: true
         })
-    }catch(error){
+    }catch(err){
         res.json({
             success: false,
             err: err
