@@ -14,8 +14,10 @@
     "docker:deploy": "npm run docker:build && npm run docker:push",
     "kube:apply": "kubectl apply -k inf/prod --context=\"kubesail-jusola\"",
     "kube:apply:dev": "kubectl apply -k inf/dev --context=\"docker-desktop\"",
-    "deploy:dev": "npm run docker:deploy:dev && npm run kube:apply:dev",
-    "deploy": "npm run docker:deploy && npm run kube:apply"
+    "kube:restart": "kubectl rollout restart deployment --context=\"kubesail-jusola\"",
+    "kube:restart:dev": "kubectl rollout restart deployment --context=\"docker-desktop\"",
+    "deploy:dev": "npm run docker:deploy:dev && npm run kube:apply:dev && npm run kube:restart:dev",
+    "deploy": "npm run docker:deploy && npm run kube:apply && npm run kube:restart"
   },
   "repository": {
     "type": "git",

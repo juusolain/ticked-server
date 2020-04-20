@@ -20,4 +20,4 @@ RUN npm install --production --no-cache --no-audit
 
 COPY . /app/
 
-CMD ["node", "index.js"]
+CMD node --experimental-modules index.js

@@ -364,7 +364,8 @@ async function getTask(taskID){
 
 async function newTask(task){
     if(task.description === undefined) task.description = null
-    if(task.taskid && task.userid && task.listid && task.userid){
+    if(task.listid === undefined) task.listid = null
+    if(task.taskid && task.userid && task.userid){
         try {
             await pool.query(sql`INSERT INTO tasks (userid, taskid, name, description, listid) VALUES (${task.userid}, ${task.taskid}, ${task.name}, ${task.description}, ${task.listid})`);
         } catch (error) {

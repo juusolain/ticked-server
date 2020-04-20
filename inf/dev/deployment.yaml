@@ -28,7 +28,7 @@ spec:
         deployedBy: deploy-node-app
     spec:
       containers:
-        - image: 'jusola/ticked:latest'
+        - image: 'jusola/ticked:next'
           imagePullPolicy: Always
           name: ticked
           env:
@@ -48,9 +48,6 @@ spec:
             requests:
               cpu: 3m
               memory: 64Mi
-          command:
-            - node
-            - index.js
       imagePullSecrets:
         - name: regcred
       restartPolicy: Always
