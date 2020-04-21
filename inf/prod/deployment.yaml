@@ -48,9 +48,6 @@ spec:
             requests:
               cpu: 3m
               memory: 64Mi
-          command:
-            - node
-            - index.js
       imagePullSecrets:
         - name: regcred
       restartPolicy: Always

@@ -13,7 +13,14 @@ import uuid from 'uuid';
 import Payments from './payments.js'
 
 //Config
-const secret = process.env.secret || crypto.randomBytes(128).toString('base64'); //get secret from env or generate new, possibly dangerous, but better than using pre-defined secret
+var fallbackSecret = null
+
+if(!process.env.secret){
+    console.warn(`Generating JWT secret instead of using from env. Logins won't persist over server restarts.`)
+    fallbackSecret = crypto.randomBytes(128).toString('base64')
+}
+
+const secret = process.env.secret || fallbackSecret
 const STRIPE_KEY = process.env.STRIPE_KEY
 const DB_USER = process.env.POSTGRES_USER || 'postgres'
 const DB_PASS = process.env.POSTGRES_PASSWORD || 'postgres'
@@ -295,16 +302,24 @@ app.post('/deleteTask', JWTmw, async(req, res)=>{
     }
 });
 
+app.post('/deleteAccount', JWTmw, async(req, res)=>{
+    try{
+        await deleteAccount(req.user.userid);
+        res.json({
+            success: true
+        })
+    }catch(err){
+        res.json({
+            success: false,
+            err: err
+        })
+    }
+});
+
 async function initUser(user) {
-    if(!user.username || !user.userid) throw 'error.queryerror'
+    if(!user.username || !user.userid) throw 'error.invalidquery'
     try {
-        await pool.query(sql`
-        INSERT INTO
-            lists
-            (listid, userid, name)
-        VALUES 
-            ('trash', ${user.userid}, 'Trash')
-        `);
+        console.log(`Initing ${user.username}`)
     } catch (error) {
         console.error(error)
         throw 'error.servererror'
@@ -313,7 +328,7 @@ async function initUser(user) {
 
 async function getTasks(userID, listid){
     if(!userID) {
-        throw 'error.getTasks.queryerror'
+        throw 'error.getTasks.invalidquery'
     }
     try {
         if(listid){
@@ -330,7 +345,7 @@ async function getTasks(userID, listid){
 }
 
 async function getLists(userID){
-    if(!userID) throw 'error.getLists.queryerror'
+    if(!userID) throw 'error.getLists.invalidquery'
     try {
         const res = await pool.query(sql`SELECT * FROM lists WHERE userid=${userID};`);
         return res.rows;
@@ -364,8 +379,7 @@ async function getTask(taskID){
 
 async function newTask(task){
     if(task.description === undefined) task.description = null
-    if(task.listid === undefined) task.listid = null
-    if(task.taskid && task.userid && task.userid){
+    if(task.taskid && task.userid && task.userid && task.listid){
         try {
             await pool.query(sql`INSERT INTO tasks (userid, taskid, name, description, listid) VALUES (${task.userid}, ${task.taskid}, ${task.name}, ${task.description}, ${task.listid})`);
         } catch (error) {
@@ -385,7 +399,7 @@ async function deleteTask(taskid, userid){
             throw 'error.servererror';
         }
     }else{
-        throw 'error.deletetask.queryerror'
+        throw 'error.deletetask.invalidquery'
     }
 }
 
@@ -420,6 +434,40 @@ async function updateTask(newTask){
 }
 
 async function removeTask(){
+
+}
+
+async function deleteAccount(userID){
+    try {
+        if(!userID) throw 'error.deleteAccount.invalidquery'
+        try {
+            await Promise.all([
+                pool.query(sql`
+                DELETE FROM
+                    users
+                WHERE
+                    userid = ${userID};
+                `),
+                pool.query(sql`
+                DELETE FROM
+                    tasks
+                WHERE
+                    userid = ${userID};
+                `),
+                pool.query(sql`
+                DELETE FROM
+                    lists
+                WHERE
+                    userid = ${userID};
+                `)
+            ]);
+        } catch (error) {
+            console.error(error)
+            throw 'error.servererror'
+        }
+    } catch (error) {
+        throw error.toString()
+    }
 
 }
 
