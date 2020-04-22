@@ -226,7 +226,7 @@ app.post('/newList', JWTmw, async(req, res)=>{
         res.json({
             success: true
         });
-    } catch (error) {
+    } catch (err) {
         res.json({
             success: false,
             err: err
