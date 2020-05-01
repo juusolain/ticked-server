@@ -4,7 +4,7 @@ metadata:
   name: ticked-ingress
 spec:
   rules:
-  - host: server.ticked.cf
+  - host: server.ticked.jusola.xyz
     http:
       paths:
       - backend:
@@ -12,5 +12,5 @@ spec:
           servicePort: 5000
   tls:
   - hosts:
-    - server.ticked.cf
+    - server.ticked.jusola.xyz
     secretName: ticked-cert
