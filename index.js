@@ -113,6 +113,8 @@ app.post('/login', async(req, res)=>{
         WHERE 
             username = ${username}`
         );
+        console.log(pgReturn)
+        console.log(username)
         if(pgReturn){
             if(await argon2.verify(pgReturn.password, password)){//Check password
                 let token = JWT.sign({ userid: pgReturn.userid, username: username }, secret, { expiresIn: 129600 }); // Sign JWT token

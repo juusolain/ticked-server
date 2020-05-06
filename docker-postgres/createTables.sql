@@ -21,3 +21,7 @@ CREATE TABLE lists (
     name text,
     PRIMARY KEY (listid)
 );
+
+
+ALTER TABLE tasks
+ADD last_modified TIMESTAMPTZ;
