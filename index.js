@@ -9,6 +9,7 @@ import expressJWT from 'express-jwt';
 import crypto from 'crypto';
 import argon2 from 'argon2';
 import uuid from 'uuid';
+import srp from 'secure-remote-password/server.js';
 
 import Payments from './payments.js'
 
@@ -150,10 +151,9 @@ app.post('/login', async(req, res)=>{
 
 //Register
 app.post('/register', async(req, res)=>{
-    const {username, password} = req.body;
+    const {username, salt, verifier} = req.body;
     const userid = uuid.v4();
     try{
-        const hashedPassword = await argon2.hash(password);
         const pgReturn = await pool.maybeOne(sql`
             -- @cache-ttl 600
             SELECT
@@ -167,8 +167,8 @@ app.post('/register', async(req, res)=>{
             await pool.query(sql`
                 -- @cache-ttl 600
                     INSERT INTO 
-                    users (userid, password, username) 
-                VALUES (${userid}, ${hashedPassword}, ${username})
+                    users (userid, username, verifier, salt)
+                VALUES (${userid}, ${username}, ${verifier}, ${salt})
             `); //Insert
             let token = JWT.sign({ userid: userid, username: username }, secret, { expiresIn: 129600 }); // Sign JWT token
             res.json({

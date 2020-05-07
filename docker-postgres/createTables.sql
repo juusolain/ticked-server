@@ -1,7 +1,8 @@
 CREATE TABLE users (
     userid varchar(36) NOT NULL,
     username varchar(255) NOT NULL,
-    password text,
+    verifier text,
+    salt text,
     PRIMARY KEY (userid)
 );
 
@@ -21,7 +22,3 @@ CREATE TABLE lists (
     name text,
     PRIMARY KEY (listid)
 );
-
-
-ALTER TABLE tasks
-ADD last_modified TIMESTAMPTZ;
