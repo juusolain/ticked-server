@@ -147,7 +147,7 @@ app.post('/login/token', async (req, res)=>{
         const salt = currentLogin.salt
         const verifier = currentLogin.verifier
         const userid = currentLogin.userid
-        console.log(currentLogin)
+        console.log({serverEphemeralSecret, clientEphemeralPublic, salt, username, verifier, clientSessionProof})
         const serverSession = srp.deriveSession(serverEphemeralSecret, clientEphemeralPublic, salt, username, verifier, clientSessionProof)
         res.json({
             serverSessionProof: serverSession.proof,
