@@ -112,18 +112,16 @@ app.post('/login/salt', async (req, res)=>{
             username = ${username}`
         );
         if(pgReturn){
-            const { verifier, salt } = pgReturn
-            currentLogins.set(username, {clientEphemeralPublic})
-            const serverEphemeral = srp.generateEphemeral(verifier)
+            const { verifier, salt, userid } = pgReturn
+            const serverEphemeral = await srp.generateEphemeral(verifier)
+            currentLogins.set(username, {clientEphemeralPublic, serverEphemeralSecret: serverEphemeral.secret, salt, verifier, userid})
             res.json({
                 success: true,
                 salt,
                 serverEphemeralPublic: serverEphemeral.public
             })
-            currentLogins.set(username, {clientEphemeralPublic, serverEphemeralSecret: serverEphemeral.secret, salt, verifier, userid})
         }else{
             // return some random salt here ... not yet implemented
-            console.log('invalid username')
             res.json({
                 success: true,
                 salt: '1234',
@@ -131,6 +129,7 @@ app.post('/login/salt', async (req, res)=>{
             })
         }
     } catch (error) {
+        console.log(error)
         res.json({
             err: 'error.servererror',
             success: false
@@ -148,6 +147,7 @@ app.post('/login/token', async (req, res)=>{
         const salt = currentLogin.salt
         const verifier = currentLogin.verifier
         const userid = currentLogin.userid
+        console.log(currentLogin)
         const serverSession = srp.deriveSession(serverEphemeralSecret, clientEphemeralPublic, salt, username, verifier, clientSessionProof)
         res.json({
             serverSessionProof: serverSession.proof,
