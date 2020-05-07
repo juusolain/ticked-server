@@ -35,6 +35,8 @@ const allowedDBrows = ['alarm', 'description', 'name', 'listid'];
 
 const payments = new Payments(STRIPE_KEY)
 
+var currentLogins = new Map()
+
 //Setting up express
 const app = express();
 
@@ -94,6 +96,73 @@ app.get('/', (req, res)=>{
 })
 
 //Login
+// Give salt to client and get client public ephemeral key and username
+app.post('/login/salt', async (req, res)=>{ 
+    const {clientEphemeralPublic, username} = req.body;
+    try {
+        const pgReturn = await pool.maybeOne(sql`
+        -- @cache-ttl 600
+        SELECT 
+            verifier,
+            salt, 
+            userid
+        FROM 
+            users 
+        WHERE 
+            username = ${username}`
+        );
+        if(pgReturn){
+            const { verifier, salt } = pgReturn
+            currentLogins.set(username, {clientEphemeralPublic})
+            const serverEphemeral = srp.generateEphemeral(verifier)
+            res.json({
+                success: true,
+                salt,
+                serverEphemeralPublic: serverEphemeral.public
+            })
+            currentLogins.set(username, {clientEphemeralPublic, serverEphemeralSecret: serverEphemeral.secret, salt, verifier, userid})
+        }else{
+            // return some random salt here ... not yet implemented
+            console.log('invalid username')
+            res.json({
+                success: true,
+                salt: '1234',
+                serverEphemeralPublic: '1234'
+            })
+        }
+    } catch (error) {
+        res.json({
+            err: 'error.servererror',
+            success: false
+        })
+    }
+})
+
+// Give token to client and create proof
+app.post('/login/token', async (req, res)=>{
+    try {
+        const {clientSessionProof, username} = req.body;
+        const currentLogin = currentLogins.get(username)
+        const serverEphemeralSecret = currentLogin.serverEphemeralSecret
+        const clientEphemeralPublic = currentLogin.clientEphemeralPublic
+        const salt = currentLogin.salt
+        const verifier = currentLogin.verifier
+        const userid = currentLogin.userid
+        const serverSession = srp.deriveSession(serverEphemeralSecret, clientEphemeralPublic, salt, username, verifier, clientSessionProof)
+        res.json({
+            serverSessionProof: serverSession.proof,
+            success: true,
+            token: JWT.sign({ username, userid }, secret, { expiresIn: 129600 })
+        })
+    } catch (error) {
+        console.warn(error)
+        res.json({
+            err: 'error.login.invalidlogin',
+            success: false
+        })
+    }
+})
+
 app.post('/login', async(req, res)=>{
     const {username, password} = req.body;
     if(!username || !password){
