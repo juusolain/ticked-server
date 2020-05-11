@@ -28,7 +28,7 @@ spec:
         deployedBy: deploy-node-app
     spec:
       containers:
-        - image: 'jusola/ticked:latest'
+        - image: 'jusola/ticked:next'
           imagePullPolicy: Always
           name: ticked
           env:

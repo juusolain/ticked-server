@@ -9,18 +9,33 @@ import expressJWT from 'express-jwt';
 import crypto from 'crypto';
 import argon2 from 'argon2';
 import uuid from 'uuid';
+import srp from 'secure-remote-password/server.js';
+
+import Payments from './payments.js'
 
 //Config
-const secret = process.env.secret || crypto.randomBytes(128).toString('base64'); //get secret from env or generate new, possibly dangerous, but better than using pre-defined secret
+var fallbackSecret = null
+
+if(!process.env.secret){
+    console.warn(`Generating JWT secret instead of using from env. Logins won't persist over server restarts.`)
+    fallbackSecret = crypto.randomBytes(128).toString('base64')
+}
+
+const secret = process.env.secret || fallbackSecret
+const STRIPE_KEY = process.env.STRIPE_KEY
 const DB_USER = process.env.POSTGRES_USER || 'postgres'
 const DB_PASS = process.env.POSTGRES_PASSWORD || 'postgres'
 const DB_NAME = process.env.POSTGRES_DB || 'postgres'
 const DB_HOST = process.env.POSTGRES_SERVICE_HOST || 'localhost'
 const DB_PORT = process.env.POSTGRES_SERVICE_PORT || 5432
-const DB_URL = `postgres://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}`;
+const DB_URL = process.env.DATABASE_URL || `postgres://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}`;
 const PORT = process.env.PORT || 5000;
 const isDev = true;
 const allowedDBrows = ['alarm', 'description', 'name', 'listid'];
+
+const payments = new Payments(STRIPE_KEY)
+
+var currentLogins = new Map()
 
 //Setting up express
 const app = express();
@@ -81,8 +96,82 @@ app.get('/', (req, res)=>{
 })
 
 //Login
+// Give salt to client and get client public ephemeral key and username
+app.post('/login/salt', async (req, res)=>{ 
+    const {clientEphemeralPublic, username} = req.body;
+    try {
+        const pgReturn = await pool.maybeOne(sql`
+        -- @cache-ttl 600
+        SELECT 
+            verifier,
+            salt, 
+            userid
+        FROM 
+            users 
+        WHERE 
+            username = ${username}`
+        );
+        if(pgReturn){
+            const { verifier, salt, userid } = pgReturn
+            const serverEphemeral = await srp.generateEphemeral(verifier)
+            currentLogins.set(username, {clientEphemeralPublic, serverEphemeralSecret: serverEphemeral.secret, salt, verifier, userid})
+            res.json({
+                success: true,
+                salt,
+                serverEphemeralPublic: serverEphemeral.public
+            })
+        }else{
+            // return some random salt here ... not yet implemented
+            res.json({
+                success: true,
+                salt: '1234',
+                serverEphemeralPublic: '1234'
+            })
+        }
+    } catch (error) {
+        console.log(error)
+        res.json({
+            err: 'error.servererror',
+            success: false
+        })
+    }
+})
+
+// Give token to client and create proof
+app.post('/login/token', async (req, res)=>{
+    try {
+        const {clientSessionProof, username} = req.body;
+        const currentLogin = currentLogins.get(username)
+        const serverEphemeralSecret = currentLogin.serverEphemeralSecret
+        const clientEphemeralPublic = currentLogin.clientEphemeralPublic
+        const salt = currentLogin.salt
+        const verifier = currentLogin.verifier
+        const userid = currentLogin.userid
+        console.log({serverEphemeralSecret, clientEphemeralPublic, salt, username, verifier, clientSessionProof})
+        const serverSession = srp.deriveSession(serverEphemeralSecret, clientEphemeralPublic, salt, username, verifier, clientSessionProof)
+        res.json({
+            serverSessionProof: serverSession.proof,
+            success: true,
+            token: JWT.sign({ username, userid }, secret, { expiresIn: 129600 })
+        })
+    } catch (error) {
+        console.warn(error)
+        res.json({
+            err: 'error.login.invalidlogin',
+            success: false
+        })
+    }
+})
+
 app.post('/login', async(req, res)=>{
     const {username, password} = req.body;
+    if(!username || !password){
+        res.json({
+            success: false,
+            token: null,
+            err: 'error.login.invalidquery'
+        });
+    }                 
     try{
         const pgReturn = await pool.maybeOne(sql`
         -- @cache-ttl 600
@@ -94,6 +183,8 @@ app.post('/login', async(req, res)=>{
         WHERE 
             username = ${username}`
         );
+        console.log(pgReturn)
+        console.log(username)
         if(pgReturn){
             if(await argon2.verify(pgReturn.password, password)){//Check password
                 let token = JWT.sign({ userid: pgReturn.userid, username: username }, secret, { expiresIn: 129600 }); // Sign JWT token
@@ -106,33 +197,32 @@ app.post('/login', async(req, res)=>{
                 res.json({
                     success: false,
                     token: null,
-                    err: 'Username or password is incorrect'
+                    err: 'error.login.invalidlogin'
                 });
             }
-        }else{//Invalid query (incorrect userid)
+        }else{
             res.json({
                 success: false,
                 token: null,
-                err: 'Username or password is incorrect'
+                err: 'error.login.invalidlogin'
             });
         }
-    }
-    catch(err){//Something broke
+    }catch(err){//Something broke
+        console.log("Internal error")
         console.error(err);
         res.json({
             success: false,
             token: null,
-            err: 'Internal server error'
+            err: 'error.servererror'
         });
     }
 });
 
 //Register
 app.post('/register', async(req, res)=>{
-    const {username, password} = req.body;
+    const {username, salt, verifier} = req.body;
     const userid = uuid.v4();
     try{
-        const hashedPassword = await argon2.hash(password);
         const pgReturn = await pool.maybeOne(sql`
             -- @cache-ttl 600
             SELECT
@@ -146,8 +236,8 @@ app.post('/register', async(req, res)=>{
             await pool.query(sql`
                 -- @cache-ttl 600
                     INSERT INTO 
-                    users (userid, password, username) 
-                VALUES (${userid}, ${hashedPassword}, ${username})
+                    users (userid, username, verifier, salt)
+                VALUES (${userid}, ${username}, ${verifier}, ${salt})
             `); //Insert
             let token = JWT.sign({ userid: userid, username: username }, secret, { expiresIn: 129600 }); // Sign JWT token
             res.json({
@@ -155,13 +245,17 @@ app.post('/register', async(req, res)=>{
                 err: null,
                 token: token,
             });
+            await initUser({
+                userid: userid, 
+                username: username
+            })
             if (isDev) console.log(`User registered ${username}: ${token}`);
         }else{
             if (process.env.NODE_ENV == 'development') console.log(`User already exists`);
             res.json({
                 success: false,
                 token: null,
-                err: 'User already exists'
+                err: 'error.register.usernameexists'
             });
         }
     }
@@ -170,7 +264,7 @@ app.post('/register', async(req, res)=>{
         res.json({
             success: false,
             token: null,
-            err: 'Internal server error'
+            err: 'error.servererror'
         });
     }
 });
@@ -180,18 +274,37 @@ app.post('/getLists', JWTmw, async(req, res)=>{
         const lists = await getLists(req.user.userid);
         res.json({
             success: true,
-            lists: lists
+            lists: lists,
+            err: null
         });
     } catch (error) {
         console.error(error)
         res.json({
             success: false,
-            error: error
+            err: error
         });
     }
 });
 
-//Proper API
+app.post('/newList', JWTmw, async(req, res)=>{
+    var {name, listid} = req.body;
+    try {
+        await newList({
+            name: name,
+            listid: listid,
+            userid: req.user.userid
+        })
+        res.json({
+            success: true
+        });
+    } catch (err) {
+        res.json({
+            success: false,
+            err: err
+        });
+    }
+})
+
 app.post('/getTask/single', JWTmw, async(req, res)=>{
     await pool.maybeOne(); //Query task
 });
@@ -205,7 +318,8 @@ app.post('/getTask/all', JWTmw, async(req, res)=>{
         })
     } catch (error) {
         res.json({
-            success: false
+            success: false,
+            err: error
         })
     }
 });
@@ -223,14 +337,12 @@ app.post('/newTask', JWTmw, async(req, res)=>{
         res.json({
             success: true
         });
-    } catch (error) {
+    } catch (err) {
         res.json({
             success: false,
-            error: "Internal server error"
+            err: err
         });
-        console.error(error);
     }
-    
 });
 
 app.post('/updateTask', JWTmw, async(req, res)=>{
@@ -239,10 +351,10 @@ app.post('/updateTask', JWTmw, async(req, res)=>{
         res.json({
             success: true,
         });
-    } catch (error) {
+    } catch (err) {
         res.json({
             success: false,
-            error: error
+            err: err
         });
     }
 });
@@ -253,44 +365,42 @@ app.post('/deleteTask', JWTmw, async(req, res)=>{
         res.json({
             success: true
         })
-    }catch(error){
+    }catch(err){
         res.json({
             success: false,
-            error: error
+            err: err
         })
     }
 });
 
-app.post('/sendKey', JWTmw, async(req, res)=>{
-    try {
-        setKey(req.user.userid, req.body.key)
+app.post('/deleteAccount', JWTmw, async(req, res)=>{
+    try{
+        await deleteAccount(req.user.userid);
         res.json({
             success: true
         })
-    } catch (error) {
+    }catch(err){
         res.json({
             success: false,
-            error: 'Internal error'
+            err: err
         })
     }
-})
+});
 
-app.post('/getKey', JWTmw, async(req,res)=>{
+async function initUser(user) {
+    if(!user.username || !user.userid) throw 'error.invalidquery'
     try {
-        const resData = await getKey(req.user.userid)
-        res.json({
-            success: true,
-            key: resData.key
-        })
+        console.log(`Initing ${user.username}`)
     } catch (error) {
-        res.json({
-            success: false,
-            key: null
-        })
+        console.error(error)
+        throw 'error.servererror'
     }
-})
+}
 
 async function getTasks(userID, listid){
+    if(!userID) {
+        throw 'error.getTasks.invalidquery'
+    }
     try {
         if(listid){
             const res = await pool.query(sql`SELECT * FROM tasks WHERE userid=${userID} AND listid=${listid};`);
@@ -301,17 +411,31 @@ async function getTasks(userID, listid){
         }
     } catch (error) {
         console.error(error);
-        throw new Error('Server database error');
+        throw 'error.servererror'
     }
 }
 
 async function getLists(userID){
+    if(!userID) throw 'error.getLists.invalidquery'
     try {
         const res = await pool.query(sql`SELECT * FROM lists WHERE userid=${userID};`);
         return res.rows;
     } catch (error) {
         console.error(error);
-        throw new Error('Server database error');
+        throw 'error.servererror'
+    }
+}
+
+async function newList(list){
+    if(list.listid && list.userid && list.name){
+        try {
+            await pool.query(sql`INSERT INTO lists (userid, name, listid) VALUES (${list.userid}, ${list.name}, ${list.listid})`);
+        } catch (error) {
+            console.error(error)
+            throw 'error.servererror'
+        }
+    }else{
+        throw 'error.newlist.invalidquery';
     }
 }
 
@@ -326,12 +450,16 @@ async function getTask(taskID){
 
 async function newTask(task){
     if(task.description === undefined) task.description = null
-    if(task.taskid && task.userid && task.listid && task.userid){
-        await pool.query(sql`INSERT INTO tasks (userid, taskid, name, description, listid) VALUES (${task.userid}, ${task.taskid}, ${task.name}, ${task.description}, ${task.listid})`);
+    if(task.taskid && task.userid && task.userid && task.listid){
+        try {
+            await pool.query(sql`INSERT INTO tasks (userid, taskid, name, description, listid) VALUES (${task.userid}, ${task.taskid}, ${task.name}, ${task.description}, ${task.listid})`);
+        } catch (error) {
+            console.error(error)
+            throw 'error.servererror'
+        }
     }else{
-        throw 'Missing some params for task creation';
+        throw 'error.newtask.invalidquery';
     }
-    
 }
 
 async function deleteTask(taskid, userid){
@@ -339,8 +467,10 @@ async function deleteTask(taskid, userid){
         try {
             await pool.query(sql`DELETE FROM tasks WHERE taskid=${taskid}`);
         } catch (error) {
-            throw error;
+            throw 'error.servererror';
         }
+    }else{
+        throw 'error.deletetask.invalidquery'
     }
 }
 
@@ -361,23 +491,54 @@ async function updateTask(newTask){
                     queries.push(sql`alarm = ${newTask.alarm}`);
                 }
             }
-            if(newTask.subtasks !== undefined){
-                queries.push(sql`subtasks = ${sql.array(newTask.subtasks, sql`varchar(36)[]`)}`);
-            }
             if(queries.length < 1){
-                throw new Error('Trying to update with no changes');
+                throw 'error.updatetask.nochanges';
             }
             await pool.query(sql`UPDATE tasks SET ${sql.join(queries, sql`, `)} WHERE taskid=${newTask.taskid};`);
         } catch (error) {
             console.error(error);
-            throw new Error('Server database error');
+            throw 'error.servererror'
         }
     }else{
-        throw new Error('No task id');
+        throw 'error.updatetask.invalidquery'
     }
 }
 
 async function removeTask(){
+
+}
+
+async function deleteAccount(userID){
+    try {
+        if(!userID) throw 'error.deleteAccount.invalidquery'
+        try {
+            await Promise.all([
+                pool.query(sql`
+                DELETE FROM
+                    users
+                WHERE
+                    userid = ${userID};
+                `),
+                pool.query(sql`
+                DELETE FROM
+                    tasks
+                WHERE
+                    userid = ${userID};
+                `),
+                pool.query(sql`
+                DELETE FROM
+                    lists
+                WHERE
+                    userid = ${userID};
+                `)
+            ]);
+        } catch (error) {
+            console.error(error)
+            throw 'error.servererror'
+        }
+    } catch (error) {
+        throw error.toString()
+    }
 
 }
 
@@ -429,9 +590,12 @@ async function getKey(userid){
 
 //Error middleware
 app.use(function (err, req, res, next) {
-    if (err.name === 'UnauthorizedError') { // Invalid token, lets log as invalidToken
+    if (err.name === 'UnauthorizedError') { // Invalid token, lets log as
         console.warn('Invalid token', err);
-        res.status(401).send(err);
+        res.send({
+            success: false,
+            err: 'error.invalidtoken'
+        })
     }
     else {
         next(err);
