@@ -16,6 +16,8 @@
     "kube:apply:dev": "kubectl apply -k inf/dev --context=\"docker-desktop\"",
     "kube:restart": "kubectl rollout restart deployment --context=\"kubesail-jusola\"",
     "kube:restart:dev": "kubectl rollout restart deployment --context=\"docker-desktop\"",
+    "stop": "kubectl scale --replicas=0 deployment --all --context=\"docker-desktop\"",
+    "start": "kubectl scale --replicas=1 deployment --all --context=\"docker-desktop\"",
     "deploy:dev": "npm run docker:deploy:dev && npm run kube:apply:dev && npm run kube:restart:dev",
     "deploy": "npm run docker:deploy && npm run kube:apply && npm run kube:restart"
   },
