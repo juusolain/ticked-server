@@ -3,6 +3,7 @@ CREATE TABLE users (
     username varchar(255) NOT NULL,
     verifier text,
     salt text,
+    stripeID text,
     PRIMARY KEY (userid)
 );
 

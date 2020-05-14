@@ -6,8 +6,9 @@ class Payments {
     this.stripe = Stripe(STRIPE_KEY)
   }
   
-  getSubscriptionCheckout = async () =>{
+  getSubscriptionCheckout = async (userid) =>{
     const session = await stripe.checkout.sessions.create({
+      client_reference_id: userid,
       payment_method_types: ['card'],
       subscription_data: {
         items: [{
