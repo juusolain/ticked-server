@@ -1,5 +1,5 @@
 bases:
-  - postgres
+  - mongo
 resources:
   - secrets\secret.yaml
   - ingress.yaml
