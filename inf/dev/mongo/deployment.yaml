@@ -28,6 +28,7 @@ spec:
               memory: 1000Mi
           ports:
             - containerPort: 27017
+              name: mongo
           envFrom:
             - secretRef:
                 name: secret

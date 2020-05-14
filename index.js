@@ -8,6 +8,7 @@ import argon2 from 'argon2';
 import uuid from 'uuid';
 import srp from 'secure-remote-password/server.js';
 import sanitize from 'mongo-sanitize'
+import expressSanitizer from 'express-sanitizer'
 import Payments from './payments.js'
 
 const MongoClient = mongodb.MongoClient;
@@ -20,13 +21,11 @@ if(!process.env.secret){
     fallbackSecret = crypto.randomBytes(128).toString('base64')
 }
 
-console.log(process.env)
-
 const secret = process.env.secret || fallbackSecret
 const STRIPE_KEY = process.env.STRIPE_KEY
 const DB_USER = process.env.MONGO_USERNAME || 'ticked'
 const DB_PASS = process.env.MONGO_PASSWORD || '1234'
-const DB_NAME = process.env.MONGO_DATABASE || 'postgres'
+const DB_NAME = process.env.MONGO_DATABASE || 'ticked'
 const DB_HOST = process.env.MONGO_SERVICE_HOST || 'localhost'
 const DB_PORT = process.env.MONGO_SERVICE_PORT || 27017
 const DB_URL = process.env.DATABASE_URL || `mongodb://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}`;
@@ -52,6 +51,7 @@ app.use((req, res, next) => {
 //Bodyparser
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(expressSanitizer());
 app.use((req, res, next)=>{
     req.body = sanitize(req.body);
     next();
@@ -62,13 +62,25 @@ const JWTmw = expressJWT({
     secret: secret,
 });
 
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 //Setting up DB
 var db
-MongoClient.connect(DB_URL).then((returnDB)=>{
-    db=returnDB
-}).catch((err)=>{
-    console.error(err)
-})
+async function dbConnect() {
+    try {
+        const client = await MongoClient.connect(DB_URL)
+        db = await client.db('ticked')
+    } catch (error) {
+        console.warn(error)
+        await sleep(2000)
+        await dbConnect()
+    }
+}
+
+dbConnect()
+
 
 //Sample response
 app.get('/', (req, res)=>{
@@ -118,7 +130,6 @@ app.post('/login/token', async (req, res)=>{
         const salt = currentLogin.salt
         const verifier = currentLogin.verifier
         const userid = currentLogin.userid
-        console.log({serverEphemeralSecret, clientEphemeralPublic, salt, username, verifier, clientSessionProof})
         const serverSession = srp.deriveSession(serverEphemeralSecret, clientEphemeralPublic, salt, username, verifier, clientSessionProof)
         res.json({
             serverSessionProof: serverSession.proof,
@@ -133,61 +144,6 @@ app.post('/login/token', async (req, res)=>{
         })
     }
 })
-
-app.post('/login', async(req, res)=>{
-    const {username, password} = req.body;
-    if(!username || !password){
-        res.json({
-            success: false,
-            token: null,
-            err: 'error.login.invalidquery'
-        });
-    }                 
-    try{
-        const pgReturn = await pool.maybeOne(sql`
-        -- @cache-ttl 600
-        SELECT 
-            password, 
-            userid
-        FROM 
-            users 
-        WHERE 
-            username = ${username}`
-        );
-        console.log(pgReturn)
-        console.log(username)
-        if(pgReturn){
-            if(await argon2.verify(pgReturn.password, password)){//Check password
-                let token = JWT.sign({ userid: pgReturn.userid, username: username }, secret, { expiresIn: 129600 }); // Sign JWT token
-                res.json({
-                    success: true,
-                    err: null,
-                    token: token,
-                });
-            }else{//Invalid password
-                res.json({
-                    success: false,
-                    token: null,
-                    err: 'error.login.invalidlogin'
-                });
-            }
-        }else{
-            res.json({
-                success: false,
-                token: null,
-                err: 'error.login.invalidlogin'
-            });
-        }
-    }catch(err){//Something broke
-        console.log("Internal error")
-        console.error(err);
-        res.json({
-            success: false,
-            token: null,
-            err: 'error.servererror'
-        });
-    }
-});
 
 //Register
 app.post('/register', async(req, res)=>{
@@ -351,7 +307,7 @@ async function register(username, salt, verifier){
     console.log(user)
     if(!user){//User doesnt exist
         const userid = uuid.v4()
-        await db.collection("users").insert({
+        await db.collection("users").insertOne({
             userid,
             username,
             verifier,
@@ -370,17 +326,21 @@ async function register(username, salt, verifier){
     }
 }
 
-async function getTasks(userID, listid){
-    if(!userID) {
+async function getTasks(userid, listid){
+    if(!userid) {
         throw 'error.getTasks.invalidquery'
     }
     try {
         if(listid){
-            const res = await pool.query(sql`SELECT * FROM tasks WHERE userid=${userID} AND listid=${listid};`);
-            return res.rows;
+            const res = await db.collection('tasks').find({listid, userid}).toArray()
+            console.log(res)
+            // const res = await pool.query(sql`SELECT * FROM tasks WHERE userid=${userid} AND listid=${listid};`);
+            return res;
         }else{
-            const res = await pool.query(sql`SELECT * FROM tasks WHERE userid=${userID};`);
-            return res.rows;
+            const res = await db.collection('tasks').find({userid})
+            const tasks = await res.toArray()
+            console.log(tasks)
+            return tasks;
         }
     } catch (error) {
         console.error(error);
@@ -388,11 +348,12 @@ async function getTasks(userID, listid){
     }
 }
 
-async function getLists(userID){
-    if(!userID) throw 'error.getLists.invalidquery'
+async function getLists(userid){
+    if(!userid) throw 'error.getLists.invalidquery'
     try {
-        const res = await pool.query(sql`SELECT * FROM lists WHERE userid=${userID};`);
-        return res.rows;
+        const res = await db.collection('lists').find({userid}).toArray()
+        console.log(res)
+        return res;
     } catch (error) {
         console.error(error);
         throw 'error.servererror'
@@ -402,7 +363,7 @@ async function getLists(userID){
 async function newList(list){
     if(list.listid && list.userid && list.name){
         try {
-            await pool.query(sql`INSERT INTO lists (userid, name, listid) VALUES (${list.userid}, ${list.name}, ${list.listid})`);
+            await db.collection('lists').insertOne({userid: list.userid, name: list.name, listid: list.listid})
         } catch (error) {
             console.error(error)
             throw 'error.servererror'
@@ -423,9 +384,9 @@ async function getTask(taskID){
 
 async function newTask(task){
     if(task.description === undefined) task.description = null
-    if(task.taskid && task.userid && task.userid && task.listid){
+    if(task.taskid && task.userid && task.listid && task.name){
         try {
-            await pool.query(sql`INSERT INTO tasks (userid, taskid, name, description, listid) VALUES (${task.userid}, ${task.taskid}, ${task.name}, ${task.description}, ${task.listid})`);
+            await db.collection('tasks').insertOne({userid: task.taskid, listid: task.listid, taskid: task.taskid, name: task.name, description: task.description})
         } catch (error) {
             console.error(error)
             throw 'error.servererror'
@@ -438,7 +399,7 @@ async function newTask(task){
 async function deleteTask(taskid, userid){
     if(taskid){
         try {
-            await pool.query(sql`DELETE FROM tasks WHERE taskid=${taskid}`);
+            await db.collection('tasks').delete({userid, taskid})
         } catch (error) {
             throw 'error.servererror';
         }
@@ -481,28 +442,28 @@ async function removeTask(){
 
 }
 
-async function deleteAccount(userID){
+async function deleteAccount(userid){
     try {
-        if(!userID) throw 'error.deleteAccount.invalidquery'
+        if(!userid) throw 'error.deleteAccount.invalidquery'
         try {
             await Promise.all([
                 pool.query(sql`
                 DELETE FROM
                     users
                 WHERE
-                    userid = ${userID};
+                    userid = ${userid};
                 `),
                 pool.query(sql`
                 DELETE FROM
                     tasks
                 WHERE
-                    userid = ${userID};
+                    userid = ${userid};
                 `),
                 pool.query(sql`
                 DELETE FROM
                     lists
                 WHERE
-                    userid = ${userID};
+                    userid = ${userid};
                 `)
             ]);
         } catch (error) {
