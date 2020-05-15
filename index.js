@@ -216,6 +216,7 @@ app.post('/getTask/single', JWTmw, async(req, res)=>{
 
 app.post('/getTask/all', JWTmw, async(req, res)=>{
     try {
+        console.log(req.user)
         const tasks = await getTasks(req.user.userid, req.body.listid);
         res.json({
             success: true,
@@ -386,7 +387,7 @@ async function newTask(task){
     if(task.description === undefined) task.description = null
     if(task.taskid && task.userid && task.listid && task.name){
         try {
-            await db.collection('tasks').insertOne({userid: task.taskid, listid: task.listid, taskid: task.taskid, name: task.name, description: task.description})
+            await db.collection('tasks').insertOne({userid: task.userid, listid: task.listid, taskid: task.taskid, name: task.name, description: task.description})
         } catch (error) {
             console.error(error)
             throw 'error.servererror'
