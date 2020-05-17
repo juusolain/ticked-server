@@ -95,7 +95,7 @@ app.get('/', (req, res)=>{
 
 //Login
 // Give salt to client and get client public ephemeral key and username
-app.post('/login/salt', [check('username').isString(), check('clientEphemeralPublic').isString()], async (req, res)=>{ 
+app.post('/login/salt', [check('username').isString(), check('clientEphemeralPublic')], async (req, res)=>{ 
     const {clientEphemeralPublic, username} = req.body;
     try {
         const vErrors = validationResult(req)
@@ -104,7 +104,6 @@ app.post('/login/salt', [check('username').isString(), check('clientEphemeralPub
             throw 'error.login.invalidquery'
         }
         const user = await db.collection("users").findOne({username: username})
-        console.log(user)
         if(user){
             const { verifier, salt, userid } = user
             const serverEphemeral = await srp.generateEphemeral(verifier)
@@ -139,7 +138,7 @@ app.post('/login/salt', [check('username').isString(), check('clientEphemeralPub
 })
 
 // Give token to client and create proof
-app.post('/login/token', [check('username').isString(), check('clientEphemeralPublic').isString()], async (req, res)=>{
+app.post('/login/token', [check('username').isString(), check('clientEphemeralPublic')], async (req, res)=>{
     try {
         const vErrors = validationResult(req)
         if(!vErrors.isEmpty()){
@@ -176,7 +175,7 @@ app.post('/login/token', [check('username').isString(), check('clientEphemeralPu
 })
 
 //Register
-app.post('/register', [check("username").isString(), check("salt").isString(), check("verifier").isString()], async(req, res)=>{
+app.post('/register', [check("username").isString(), check("salt"), check("verifier")], async(req, res)=>{
     const vErrors = validationResult(req)
     if(!vErrors.isEmpty()){
         console.log(vErrors)
@@ -263,13 +262,8 @@ app.post('/newList', JWTmw, async(req, res)=>{
     }
 })
 
-app.post('/getTask/single', JWTmw, async(req, res)=>{
-    await pool.maybeOne(); //Query task
-});
-
 app.post('/getTask/all', JWTmw, async(req, res)=>{
     try {
-        console.log(req.user)
         const tasks = await getTasks(req.user.userid, req.body.listid);
         res.json({
             success: true,
@@ -284,19 +278,15 @@ app.post('/getTask/all', JWTmw, async(req, res)=>{
 });
 
 app.post('/newTask', JWTmw, async(req, res)=>{
-    var {name, description, taskid, listid} = req.body;
+    const {name, description, taskid, listid} = req.body;
     try {
-        await newTask({
-            name: name,
-            description: description,
-            taskid: taskid,
-            listid: listid,
-            userid: req.user.userid
-        })
+        await newTask(req.user.userid, listid, taskid, name, description)
         res.json({
-            success: true
+            success: true,
+            err: null
         });
     } catch (err) {
+        console.log(err)
         res.json({
             success: false,
             err: err
@@ -307,11 +297,15 @@ app.post('/newTask', JWTmw, async(req, res)=>{
 app.post('/updateTask', JWTmw, async(req, res)=>{
     try {
         const {taskid, listid, name, description, alarm} = req.body
-        await updateTask({userid: req.user.userid, taskid, listid, name, description, alarm});
+        await updateTask(req.user.userid, listid, taskid, name, description)
         res.json({
-            success: true,
+            success: true
         });
     } catch (err) {
+        if(typeof err !== String){
+            console.error(err)
+            err = 'error.servererror'
+        }
         res.json({
             success: false,
             err: err
@@ -351,6 +345,11 @@ async function initUser(user) {
     if(!user.username || !user.userid) throw 'error.invalidquery'
     try {
         console.log(`Initing ${user.username}`)
+        const customer = await payments.createCustomer()
+        await db.collection('users').updateOne({
+            stripeCustomer: customer.id
+        })
+        console.log('Created stripe userid')
     } catch (error) {
         console.error(error)
         throw 'error.servererror'
@@ -388,13 +387,11 @@ async function getTasks(userid, listid){
     try {
         if(listid){
             const res = await db.collection('tasks').find({listid, userid}).toArray()
-            console.log(res)
             // const res = await pool.query(sql`SELECT * FROM tasks WHERE userid=${userid} AND listid=${listid};`);
             return res;
         }else{
             const res = await db.collection('tasks').find({userid})
             const tasks = await res.toArray()
-            console.log(tasks)
             return tasks;
         }
     } catch (error) {
@@ -407,7 +404,6 @@ async function getLists(userid){
     if(!userid) throw 'error.getLists.invalidquery'
     try {
         const res = await db.collection('lists').find({userid}).toArray()
-        console.log(res)
         return res;
     } catch (error) {
         console.error(error);
@@ -428,20 +424,10 @@ async function newList(list){
     }
 }
 
-async function getTask(taskID){
-    //Not implemented, for debug
-    return {
-        name: taskID,
-        taskid: taskID,
-        description: "A nice task that should overflow. Here's a lot of stuff to fill space: Lorem ipsum dolor sit amet, phasellus vestibulum enim, volutpat elit elit. Mi curabitur, magna parturient euismod, pede adipiscing arcu. Tincidunt in pulvinar, ut natoque, erat volutpat dolor. In gravida, vehicula fermentum blandit, consectetuer arcu. Sit quia, tincidunt quis gravida. Placerat dui arcu, vestibulum interdum, convallis tincidunt. Lectus deserunt felis, duis ante felis. In nunc curabitur, dui nec vulputate. Tristique ut suspendisse, et justo, fringilla semper sem. Sed sem in. Metus varius, cursus sollicitudin, aliquet nulla hac. Volutpat eros, mi parturient, lectus vestibulum metus."
-    }
-}
-
-async function newTask(task){
-    if(task.description === undefined) task.description = null
-    if(task.taskid && task.userid && task.listid && task.name){
+async function newTask(userid=null, listid=null, taskid=null, name=null, description=null){
+    if(taskid && userid && listid && name){
         try {
-            await db.collection('tasks').insertOne({userid: task.userid, listid: task.listid, taskid: task.taskid, name: task.name, description: task.description})
+            await db.collection('tasks').insertOne({userid, listid, taskid, name, description})
         } catch (error) {
             console.error(error)
             throw 'error.servererror'
@@ -463,16 +449,17 @@ async function deleteTask(taskid, userid){
     }
 }
 
-async function updateTask(newTask){
-    if(newTask.taskid){
+async function updateTask(userid=null, listid=null, taskid=null, name=null, description=null){
+    if(taskid && userid && listid){
         try {
-            await db.collection('tasks').update(newTask)
+            const newTask = {userid, listid, taskid, name, description}
+            await db.collection('tasks').replaceOne({userid, taskid}, newTask)
         } catch (error) {
-            console.error(error);
+            console.error(error)
             throw 'error.servererror'
         }
     }else{
-        throw 'error.updatetask.invalidquery'
+        throw 'error.updatetask.invalidquery';
     }
 }
 

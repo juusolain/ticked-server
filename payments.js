@@ -39,6 +39,39 @@ class Payments {
       throw 'error.payments.manage'
     }
   }
+
+  createCustomer = async (email) => {
+    const customer = await this.stripe.customer.create({
+      email: email
+    })
+    return customer
+  }
+
+  createSubscription = async (paymentMethodID, customerID) => {
+    try {
+      await this.stripe.paymentMethods.attach(paymentMethod, {
+        customer: customerID
+      })
+    } catch (error) {
+      console.warn(error)
+      throw 'error.stripe.attachPaymentMethod'
+    }
+
+    await this.stripe.customers.update(
+      customerID,
+      {
+        invoice_settings: {
+          default_payment_method: paymentMethodID,
+        },
+      }
+    );
+
+    const subscription = await stripe.subscriptions.create({
+      customer: req.body.customerId,
+      items: [{ price: 'pro-yearly' }],
+      expand: ['latest_invoice.payment_intent'],
+    });
+  }
 }
 
 export default Payments
