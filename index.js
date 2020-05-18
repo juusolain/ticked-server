@@ -103,7 +103,7 @@ app.post('/login/salt', [check('username').isString(), check('clientEphemeralPub
             console.log(vErrors)
             throw 'error.login.invalidquery'
         }
-        const user = await db.collection("users").findOne({username: username})
+        const user = await db.collection("users").findOne({username: username}, {projection: {_id: 0}})
         if(user){
             const { verifier, salt, userid } = user
             const serverEphemeral = await srp.generateEphemeral(verifier)
@@ -296,8 +296,8 @@ app.post('/newTask', JWTmw, async(req, res)=>{
 
 app.post('/updateTask', JWTmw, async(req, res)=>{
     try {
-        const {taskid, listid, name, description, alarm} = req.body
-        await updateTask(req.user.userid, listid, taskid, name, description)
+        const {taskid, listid, name, description, alarm, done} = req.body
+        await updateTask(req.user.userid, listid, taskid, name, description, done)
         res.json({
             success: true
         });
@@ -357,7 +357,7 @@ async function initUser(user) {
 }
 
 async function register(username, salt, verifier){
-    const user = await db.collection("users").findOne({username: username})
+    const user = await db.collection("users").findOne({username: username}, {projection: {_id: 0}})
     console.log(user)
     if(!user){//User doesnt exist
         const userid = uuid.v4()
@@ -386,11 +386,11 @@ async function getTasks(userid, listid){
     }
     try {
         if(listid){
-            const res = await db.collection('tasks').find({listid, userid}).toArray()
+            const res = await db.collection('tasks').find({listid, userid}, {projection: {_id: 0}}).toArray()
             // const res = await pool.query(sql`SELECT * FROM tasks WHERE userid=${userid} AND listid=${listid};`);
             return res;
         }else{
-            const res = await db.collection('tasks').find({userid})
+            const res = await db.collection('tasks').find({userid}, {projection: {_id: 0}})
             const tasks = await res.toArray()
             return tasks;
         }
@@ -403,7 +403,7 @@ async function getTasks(userid, listid){
 async function getLists(userid){
     if(!userid) throw 'error.getLists.invalidquery'
     try {
-        const res = await db.collection('lists').find({userid}).toArray()
+        const res = await db.collection('lists').find({userid}, {projection: {_id: 0}}).toArray()
         return res;
     } catch (error) {
         console.error(error);
@@ -449,10 +449,10 @@ async function deleteTask(taskid, userid){
     }
 }
 
-async function updateTask(userid=null, listid=null, taskid=null, name=null, description=null){
+async function updateTask(userid=null, listid=null, taskid=null, name=null, description=null, done=false){
     if(taskid && userid && listid){
         try {
-            const newTask = {userid, listid, taskid, name, description}
+            const newTask = {userid, listid, taskid, name, description, done}
             await db.collection('tasks').replaceOne({userid, taskid}, newTask)
         } catch (error) {
             console.error(error)
