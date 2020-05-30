@@ -137,7 +137,7 @@ app.post('/login/salt', [check('username').isString(), check('clientEphemeralPub
     }
 })
 
-// Give token to client and create proof
+// Give token and encryptionkey to client and create proof
 app.post('/login/token', [check('username').isString(), check('clientEphemeralPublic')], async (req, res)=>{
     try {
         const vErrors = validationResult(req)
@@ -153,10 +153,12 @@ app.post('/login/token', [check('username').isString(), check('clientEphemeralPu
         const verifier = currentLogin.verifier
         const userid = currentLogin.userid
         const serverSession = srp.deriveSession(serverEphemeralSecret, clientEphemeralPublic, salt, username, verifier, clientSessionProof)
+        const dataEncryptionKey = await getDataKey(userid)
         res.json({
             serverSessionProof: serverSession.proof,
             success: true,
-            token: JWT.sign({ username, userid }, secret, { expiresIn: 129600 })
+            token: JWT.sign({ username, userid }, secret, { expiresIn: 129600 }),
+            key: dataEncryptionKey
         })
     } catch (error) {
         if(typeof error === String){
@@ -366,7 +368,7 @@ async function register(username, salt, verifier, key){
             username,
             verifier,
             salt,
-            key
+            dataEncryptionKey: key
         })
         let token = JWT.sign({ userid: userid, username: username }, secret, { expiresIn: 129600 }); // Sign JWT token
         initUser({
@@ -378,6 +380,20 @@ async function register(username, salt, verifier, key){
     }else{
         if (process.env.NODE_ENV == 'development') console.log(`User already exists`);
         throw 'error.register.usernameexists'
+    }
+}
+
+async function getDataEncryptionKey(userid){
+    if(!userid) {
+        throw 'error.login.invalidquery'
+    }
+    try {
+        const res = await db.collection('tasks').find({userid}, {projection: {_id: 0}}).toArray()
+        const user = res[0]
+        return user.dataEncryptionKey
+    } catch (error) {
+        console.error(error);
+        throw 'error.servererror'
     }
 }
 
