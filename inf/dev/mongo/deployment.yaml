@@ -2,45 +2,40 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: postgres
+  name: mongo
 spec:
   selector:
     matchLabels:
-      app: postgres
+      app: mongo
   replicas: 1
   strategy:
     type: Recreate
   template:
     metadata:
       labels:
-        app: postgres
+        app: mongo
     spec:
       containers:
         - name: master
-          image: jusola/ticked-postgres:latest
+          image: jusola/ticked-mongo:latest
           imagePullPolicy: Always
           resources:
             requests:
               cpu: 10m
               memory: 25Mi
             limits:
-              cpu: 250m
-              memory: 128Mi
+              cpu: 25m
+              memory: 100Mi
           ports:
-            - containerPort: 5432
-              name: postgres
+            - containerPort: 27017
+              name: mongo
           envFrom:
             - secretRef:
                 name: secret
-          env:
-          - name: PGDATA
-            value: /var/lib/postgresql/data/pgdata
           volumeMounts:
-            - mountPath: "/var/lib/postgresql/data"
-              name: postgres-data
+            - mountPath: /data/db
+              name: mongo-data
       volumes:
-        - name: postgres-data
+        - name: mongo-data
           persistentVolumeClaim:
-            claimName: postgres-pvc
-      imagePullSecrets:
-        - name: regcred
+            claimName: mongo-pvc

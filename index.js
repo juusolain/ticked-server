@@ -1,17 +1,19 @@
 import express from 'express';
-import NodeCache from 'node-cache';
-import slonikQCache from 'slonik-interceptor-query-cache';
-import Slonik from 'slonik';
-const sql = Slonik.sql;
+import mongodb from 'mongodb';
 import bodyParser from 'body-parser';
 import JWT from 'jsonwebtoken';
 import expressJWT from 'express-jwt';
 import crypto from 'crypto';
-import argon2 from 'argon2';
 import uuid from 'uuid';
 import srp from 'secure-remote-password/server.js';
-
+import sanitize from 'mongo-sanitize'
+import expressSanitizer from 'express-sanitizer'
+import expressValidator from 'express-validator'
 import Payments from './payments.js'
+
+const {check, validationResult} = expressValidator
+
+const MongoClient = mongodb.MongoClient;
 
 //Config
 var fallbackSecret = null
@@ -23,15 +25,14 @@ if(!process.env.secret){
 
 const secret = process.env.secret || fallbackSecret
 const STRIPE_KEY = process.env.STRIPE_KEY
-const DB_USER = process.env.POSTGRES_USER || 'postgres'
-const DB_PASS = process.env.POSTGRES_PASSWORD || 'postgres'
-const DB_NAME = process.env.POSTGRES_DB || 'postgres'
-const DB_HOST = process.env.POSTGRES_SERVICE_HOST || 'localhost'
-const DB_PORT = process.env.POSTGRES_SERVICE_PORT || 5432
-const DB_URL = process.env.DATABASE_URL || `postgres://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}`;
+const DB_USER = process.env.MONGO_USERNAME || 'ticked'
+const DB_PASS = process.env.MONGO_PASSWORD || '1234'
+const DB_NAME = process.env.MONGO_DATABASE || 'ticked'
+const DB_HOST = process.env.MONGO_SERVICE_HOST || 'localhost'
+const DB_PORT = process.env.MONGO_SERVICE_PORT || 27017
+const DB_URL = process.env.DATABASE_URL || `mongodb://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}`;
 const PORT = process.env.PORT || 5000;
 const isDev = true;
-const allowedDBrows = ['alarm', 'description', 'name', 'listid'];
 
 const payments = new Payments(STRIPE_KEY)
 
@@ -52,43 +53,40 @@ app.use((req, res, next) => {
 //Bodyparser
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(expressSanitizer());
+app.use((req, res, next)=>{
+    req.body = sanitize(req.body);
+    next();
+})
 
 //JWT middleware
 const JWTmw = expressJWT({
     secret: secret,
 });
 
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 //Setting up DB
-const cache = new NodeCache({
-    checkperiod: 60,
-    stdTTL: 3600, //1 hour
-    useClones: false,
-});
-  
-const hashQuery = (query) => {
-    return JSON.stringify(query);
-};
+var db
+async function dbConnect(tries = 0) {
+    if(tries > 5){
+        throw new Error('MongoClient connection failed, 5 tries exhausted')
+    }
+    tries++
+    try {
+        const client = await MongoClient.connect(DB_URL)
+        db = await client.db('ticked')
+        console.log('Mongo connected')
+    } catch (error) {
+        console.warn('MongoClient connection failed, trying again in 5 seconds')
+        await sleep(5000)
+        await dbConnect(tries)
+    }
+}
 
-//Create cacheinterceptor
-const interceptors = [
-    slonikQCache.createQueryCacheInterceptor({
-        storage: {
-        get: (query) => {
-          return cache.get(hashQuery(query)) || null;
-        },
-        set: (query, cacheAttributes, queryResult) => {
-          cache.set(hashQuery(query), queryResult, cacheAttributes.ttl);
-        },
-      },
-    }),
-];
 
-const pool = Slonik.createPool(DB_URL, {
-    interceptors: interceptors,
-    maximumPoolSize: 10,
-    idleTimeout: 30000,
-    connectionTimeout: 15000,
-});
 
 //Sample response
 app.get('/', (req, res)=>{
@@ -97,22 +95,17 @@ app.get('/', (req, res)=>{
 
 //Login
 // Give salt to client and get client public ephemeral key and username
-app.post('/login/salt', async (req, res)=>{ 
+app.post('/login/salt', [check('username').isString(), check('clientEphemeralPublic')], async (req, res)=>{ 
     const {clientEphemeralPublic, username} = req.body;
     try {
-        const pgReturn = await pool.maybeOne(sql`
-        -- @cache-ttl 600
-        SELECT 
-            verifier,
-            salt, 
-            userid
-        FROM 
-            users 
-        WHERE 
-            username = ${username}`
-        );
-        if(pgReturn){
-            const { verifier, salt, userid } = pgReturn
+        const vErrors = validationResult(req)
+        if(!vErrors.isEmpty()){
+            console.log(vErrors)
+            throw 'error.login.invalidquery'
+        }
+        const user = await db.collection("users").findOne({username: username}, {projection: {_id: 0}})
+        if(user){
+            const { verifier, salt, userid } = user
             const serverEphemeral = await srp.generateEphemeral(verifier)
             currentLogins.set(username, {clientEphemeralPublic, serverEphemeralSecret: serverEphemeral.secret, salt, verifier, userid})
             res.json({
@@ -129,17 +122,29 @@ app.post('/login/salt', async (req, res)=>{
             })
         }
     } catch (error) {
-        console.log(error)
-        res.json({
-            err: 'error.servererror',
-            success: false
-        })
+        if(typeof error === String){
+            res.json({
+                err: error,
+                success: false
+            })
+        }else{
+            console.log(error)
+            res.json({
+                err: 'error.login.invalidlogin',
+                success: false
+            })
+        }
     }
 })
 
-// Give token to client and create proof
-app.post('/login/token', async (req, res)=>{
+// Give token and encryptionkey to client and create proof
+app.post('/login/token', [check('username').isString(), check('clientEphemeralPublic')], async (req, res)=>{
     try {
+        const vErrors = validationResult(req)
+        if(!vErrors.isEmpty()){
+            console.log(vErrors)
+            throw 'error.login.invalidquery'
+        }
         const {clientSessionProof, username} = req.body;
         const currentLogin = currentLogins.get(username)
         const serverEphemeralSecret = currentLogin.serverEphemeralSecret
@@ -147,127 +152,81 @@ app.post('/login/token', async (req, res)=>{
         const salt = currentLogin.salt
         const verifier = currentLogin.verifier
         const userid = currentLogin.userid
-        console.log({serverEphemeralSecret, clientEphemeralPublic, salt, username, verifier, clientSessionProof})
         const serverSession = srp.deriveSession(serverEphemeralSecret, clientEphemeralPublic, salt, username, verifier, clientSessionProof)
+        const dataEncryptionKey = await getDataKey(userid)
         res.json({
             serverSessionProof: serverSession.proof,
             success: true,
-            token: JWT.sign({ username, userid }, secret, { expiresIn: 129600 })
+            token: JWT.sign({ username, userid }, secret, { expiresIn: 129600 }),
+            key: dataEncryptionKey
         })
     } catch (error) {
-        console.warn(error)
-        res.json({
-            err: 'error.login.invalidlogin',
-            success: false
-        })
+        if(typeof error === String){
+            res.json({
+                err: error,
+                success: false
+            })
+        }else{
+            console.log(error)
+            res.json({
+                err: 'error.servererror',
+                success: false
+            })
+        }
     }
 })
 
-app.post('/login', async(req, res)=>{
-    const {username, password} = req.body;
-    if(!username || !password){
-        res.json({
-            success: false,
-            token: null,
-            err: 'error.login.invalidquery'
-        });
-    }                 
+//Register
+app.post('/register', [check("username").isString(), check("salt"), check("verifier"), check("key§")], async(req, res)=>{
+    const vErrors = validationResult(req)
+    if(!vErrors.isEmpty()){
+        console.log(vErrors)
+        throw 'error.register.invalidquery'
+    }
+    const {username, salt, verifier, key} = req.body;
     try{
-        const pgReturn = await pool.maybeOne(sql`
-        -- @cache-ttl 600
-        SELECT 
-            password, 
-            userid
-        FROM 
-            users 
-        WHERE 
-            username = ${username}`
-        );
-        console.log(pgReturn)
-        console.log(username)
-        if(pgReturn){
-            if(await argon2.verify(pgReturn.password, password)){//Check password
-                let token = JWT.sign({ userid: pgReturn.userid, username: username }, secret, { expiresIn: 129600 }); // Sign JWT token
-                res.json({
-                    success: true,
-                    err: null,
-                    token: token,
-                });
-            }else{//Invalid password
-                res.json({
-                    success: false,
-                    token: null,
-                    err: 'error.login.invalidlogin'
-                });
-            }
-        }else{
+        const token = await register(username, salt, verifier, key)
+        res.json({
+            token: token,
+            err: null,
+            success: true
+        })
+    }
+    catch(err){//Something broke
+        if(typeof err === String){
             res.json({
                 success: false,
                 token: null,
-                err: 'error.login.invalidlogin'
+                err: err
+            });
+        }else{
+            console.error(err);
+            res.json({
+                success: false,
+                token: null,
+                err: 'error.servererror'
             });
         }
-    }catch(err){//Something broke
-        console.log("Internal error")
-        console.error(err);
-        res.json({
-            success: false,
-            token: null,
-            err: 'error.servererror'
-        });
     }
 });
 
-//Register
-app.post('/register', async(req, res)=>{
-    const {username, salt, verifier} = req.body;
-    const userid = uuid.v4();
-    try{
-        const pgReturn = await pool.maybeOne(sql`
-            -- @cache-ttl 600
-            SELECT
-                userid
-            FROM 
-                users 
-            WHERE 
-                username = ${username}`
-        ); //Check if user exists
-        if(!pgReturn){//User doesnt exist
-            await pool.query(sql`
-                -- @cache-ttl 600
-                    INSERT INTO 
-                    users (userid, username, verifier, salt)
-                VALUES (${userid}, ${username}, ${verifier}, ${salt})
-            `); //Insert
-            let token = JWT.sign({ userid: userid, username: username }, secret, { expiresIn: 129600 }); // Sign JWT token
-            res.json({
-                success: true,
-                err: null,
-                token: token,
-            });
-            await initUser({
-                userid: userid, 
-                username: username
-            })
-            if (isDev) console.log(`User registered ${username}: ${token}`);
-        }else{
-            if (process.env.NODE_ENV == 'development') console.log(`User already exists`);
-            res.json({
-                success: false,
-                token: null,
-                err: 'error.register.usernameexists'
-            });
-        }
-    }
-    catch(err){//Something broke
-        console.error(err);
-        res.json({
-            success: false,
-            token: null,
-            err: 'error.servererror'
-        });
-    }
-});
+app.get('/newSubscription', JWTmw, async(req, res)=>{
+    const checkout = await payments.getSubscriptionCheckout(req.user.userid)
+    res.json({
+        success: true,
+        err: null,
+        token: checkout
+    })
+})
+
+app.get('/manageSubscription', JWTmw, async(req, res)=>{
+    const billingPortal = await payments.getBillingPortal(req.user.userid)
+    res.json({
+        success: true,
+        err: null,
+        token: billingPortal
+    })
+})
 
 app.post('/getLists', JWTmw, async(req, res)=>{
     try {
@@ -305,10 +264,6 @@ app.post('/newList', JWTmw, async(req, res)=>{
     }
 })
 
-app.post('/getTask/single', JWTmw, async(req, res)=>{
-    await pool.maybeOne(); //Query task
-});
-
 app.post('/getTask/all', JWTmw, async(req, res)=>{
     try {
         const tasks = await getTasks(req.user.userid, req.body.listid);
@@ -325,19 +280,15 @@ app.post('/getTask/all', JWTmw, async(req, res)=>{
 });
 
 app.post('/newTask', JWTmw, async(req, res)=>{
-    var {name, description, taskid, listid} = req.body;
+    const {name, description, taskid, listid} = req.body;
     try {
-        await newTask({
-            name: name,
-            description: description,
-            taskid: taskid,
-            listid: listid,
-            userid: req.user.userid
-        })
+        await newTask(req.user.userid, listid, taskid, name, description)
         res.json({
-            success: true
+            success: true,
+            err: null
         });
     } catch (err) {
+        console.log(err)
         res.json({
             success: false,
             err: err
@@ -347,11 +298,16 @@ app.post('/newTask', JWTmw, async(req, res)=>{
 
 app.post('/updateTask', JWTmw, async(req, res)=>{
     try {
-        await updateTask(req.body);
+        const {taskid, listid, name, description, alarm, done} = req.body
+        await updateTask(req.user.userid, listid, taskid, name, description, done)
         res.json({
-            success: true,
+            success: true
         });
     } catch (err) {
+        if(typeof err !== String){
+            console.error(err)
+            err = 'error.servererror'
+        }
         res.json({
             success: false,
             err: err
@@ -391,23 +347,69 @@ async function initUser(user) {
     if(!user.username || !user.userid) throw 'error.invalidquery'
     try {
         console.log(`Initing ${user.username}`)
+        const customer = await payments.createCustomer()
+        await db.collection('users').updateOne({
+            stripeCustomer: customer.id
+        })
+        console.log('Created stripe userid')
     } catch (error) {
         console.error(error)
         throw 'error.servererror'
     }
 }
 
-async function getTasks(userID, listid){
-    if(!userID) {
+async function register(username, salt, verifier, key){
+    const user = await db.collection("users").findOne({username: username}, {projection: {_id: 0}})
+    console.log(user)
+    if(!user){//User doesnt exist
+        const userid = uuid.v4()
+        await db.collection("users").insertOne({
+            userid,
+            username,
+            verifier,
+            salt,
+            dataEncryptionKey: key
+        })
+        let token = JWT.sign({ userid: userid, username: username }, secret, { expiresIn: 129600 }); // Sign JWT token
+        initUser({
+            userid: userid, 
+            username: username
+        })
+        if (isDev) console.log(`User registered ${username}: ${token}`);
+        return token
+    }else{
+        if (process.env.NODE_ENV == 'development') console.log(`User already exists`);
+        throw 'error.register.usernameexists'
+    }
+}
+
+async function getDataEncryptionKey(userid){
+    if(!userid) {
+        throw 'error.login.invalidquery'
+    }
+    try {
+        const res = await db.collection('tasks').find({userid}, {projection: {_id: 0}}).toArray()
+        const user = res[0]
+        return user.dataEncryptionKey
+    } catch (error) {
+        console.error(error);
+        throw 'error.servererror'
+    }
+}
+
+async function getTasks(userid, listid){
+    if(!userid) {
         throw 'error.getTasks.invalidquery'
     }
     try {
         if(listid){
-            const res = await pool.query(sql`SELECT * FROM tasks WHERE userid=${userID} AND listid=${listid};`);
-            return res.rows;
+            const res = await db.collection('tasks').find({listid, userid}, {projection: {_id: 0}}).toArray()
+            // const res = await pool.query(sql`SELECT * FROM tasks WHERE userid=${userid} AND listid=${listid};`);
+            return res;
         }else{
-            const res = await pool.query(sql`SELECT * FROM tasks WHERE userid=${userID};`);
-            return res.rows;
+            const res = await db.collection('tasks').find({userid}, {projection: {_id: 0}})
+            const tasks = await res.toArray()
+            return tasks;
         }
     } catch (error) {
         console.error(error);
@@ -415,11 +417,11 @@ async function getTasks(userID, listid){
     }
 }
 
-async function getLists(userID){
-    if(!userID) throw 'error.getLists.invalidquery'
+async function getLists(userid){
+    if(!userid) throw 'error.getLists.invalidquery'
     try {
-        const res = await pool.query(sql`SELECT * FROM lists WHERE userid=${userID};`);
-        return res.rows;
+        const res = await db.collection('lists').find({userid}, {projection: {_id: 0}}).toArray()
+        return res;
     } catch (error) {
         console.error(error);
         throw 'error.servererror'
@@ -429,7 +431,7 @@ async function getLists(userID){
 async function newList(list){
     if(list.listid && list.userid && list.name){
         try {
-            await pool.query(sql`INSERT INTO lists (userid, name, listid) VALUES (${list.userid}, ${list.name}, ${list.listid})`);
+            await db.collection('lists').insertOne({userid: list.userid, name: list.name, listid: list.listid})
         } catch (error) {
             console.error(error)
             throw 'error.servererror'
@@ -439,20 +441,10 @@ async function newList(list){
     }
 }
 
-async function getTask(taskID){
-    //Not implemented, for debug
-    return {
-        name: taskID,
-        taskid: taskID,
-        description: "A nice task that should overflow. Here's a lot of stuff to fill space: Lorem ipsum dolor sit amet, phasellus vestibulum enim, volutpat elit elit. Mi curabitur, magna parturient euismod, pede adipiscing arcu. Tincidunt in pulvinar, ut natoque, erat volutpat dolor. In gravida, vehicula fermentum blandit, consectetuer arcu. Sit quia, tincidunt quis gravida. Placerat dui arcu, vestibulum interdum, convallis tincidunt. Lectus deserunt felis, duis ante felis. In nunc curabitur, dui nec vulputate. Tristique ut suspendisse, et justo, fringilla semper sem. Sed sem in. Metus varius, cursus sollicitudin, aliquet nulla hac. Volutpat eros, mi parturient, lectus vestibulum metus."
-    }
-}
-
-async function newTask(task){
-    if(task.description === undefined) task.description = null
-    if(task.taskid && task.userid && task.userid && task.listid){
+async function newTask(userid=null, listid=null, taskid=null, name=null, description=null){
+    if(taskid && userid && listid && name){
         try {
-            await pool.query(sql`INSERT INTO tasks (userid, taskid, name, description, listid) VALUES (${task.userid}, ${task.taskid}, ${task.name}, ${task.description}, ${task.listid})`);
+            await db.collection('tasks').insertOne({userid, listid, taskid, name, description})
         } catch (error) {
             console.error(error)
             throw 'error.servererror'
@@ -465,7 +457,7 @@ async function newTask(task){
 async function deleteTask(taskid, userid){
     if(taskid){
         try {
-            await pool.query(sql`DELETE FROM tasks WHERE taskid=${taskid}`);
+            await db.collection('tasks').delete({userid, taskid})
         } catch (error) {
             throw 'error.servererror';
         }
@@ -474,33 +466,17 @@ async function deleteTask(taskid, userid){
     }
 }
 
-async function updateTask(newTask){
-    if(newTask.taskid){
+async function updateTask(userid=null, listid=null, taskid=null, name=null, description=null, done=false){
+    if(taskid && userid && listid){
         try {
-            var queries = [];
-            if(newTask.name !== undefined){
-                queries.push(sql`name = ${newTask.name}`);
-            }
-            if(newTask.description !== undefined){
-                queries.push(sql`description = ${newTask.description}`);
-            }
-            if(newTask.alarm !== undefined){
-                if(newTask.alarm === null){
-                    queries.push(sql`alarm = NULL`);
-                }else{
-                    queries.push(sql`alarm = ${newTask.alarm}`);
-                }
-            }
-            if(queries.length < 1){
-                throw 'error.updatetask.nochanges';
-            }
-            await pool.query(sql`UPDATE tasks SET ${sql.join(queries, sql`, `)} WHERE taskid=${newTask.taskid};`);
+            const newTask = {userid, listid, taskid, name, description, done}
+            await db.collection('tasks').replaceOne({userid, taskid}, newTask)
         } catch (error) {
-            console.error(error);
+            console.error(error)
             throw 'error.servererror'
         }
     }else{
-        throw 'error.updatetask.invalidquery'
+        throw 'error.updatetask.invalidquery';
     }
 }
 
@@ -508,29 +484,14 @@ async function removeTask(){
 
 }
 
-async function deleteAccount(userID){
+async function deleteAccount(userid){
     try {
-        if(!userID) throw 'error.deleteAccount.invalidquery'
+        if(!userid) throw 'error.deleteAccount.invalidquery'
         try {
             await Promise.all([
-                pool.query(sql`
-                DELETE FROM
-                    users
-                WHERE
-                    userid = ${userID};
-                `),
-                pool.query(sql`
-                DELETE FROM
-                    tasks
-                WHERE
-                    userid = ${userID};
-                `),
-                pool.query(sql`
-                DELETE FROM
-                    lists
-                WHERE
-                    userid = ${userID};
-                `)
+                db.collection('tasks').delete({userid}),
+                db.collection('lists').delete({userid}),
+                db.collection('users').delete({userid})
             ]);
         } catch (error) {
             console.error(error)
@@ -602,6 +563,14 @@ app.use(function (err, req, res, next) {
     }
 });
 
-app.listen(PORT, ()=>{
-    console.log(`listening on ${PORT}`);
-});
+async function initialize () {
+    try {
+        await dbConnect()
+        await app.listen(PORT)
+        console.log(`Listening on ${PORT}`)
+    } catch (error) {
+        console.error(error)
+    }
+}
+
+initialize()
