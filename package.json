@@ -32,7 +32,6 @@
   },
   "homepage": "https://github.com/jusola/ticked-server#readme",
   "dependencies": {
-    "argon2": "^0.26.2",
     "body-parser": "^1.19.0",
     "cors": "^2.8.5",
     "express": "^5.0.0-alpha.7",
