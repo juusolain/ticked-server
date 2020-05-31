@@ -185,6 +185,7 @@ app.post('/register', [check("username").isString(), check("salt"), check("verif
             success: false,
             err: 'error.register.invalidquery'
         })
+        return
     }
     const {username, salt, verifier} = req.body;
     try{
@@ -212,14 +213,14 @@ app.post('/register', [check("username").isString(), check("salt"), check("verif
         }
     }
 });
-
-app.post('/datakey/set', [check('key')], async(req, res)=>{
+s
+app.post('/datakey/set', [check('key')], JWTmw, async(req, res)=>{
     const vErrors = validationResult(req)
     if(!vErrors.isEmpty()){
         console.log(vErrors)
         throw 'error.datakey.invalidquery'
     }
-    const {key} = req.body;
+    const {key} = req.body
     const userid = req.user.userid
     try{
         const token = await setDataKey(userid, key)
@@ -427,8 +428,8 @@ async function setDataKey(userid, newKey){
         throw 'error.datakey.invalidquery'
     }
     try {
-        await db.collection('tasks').updateOne({userid}, {
-            $set: {key: newKey}
+        await db.collection('users').updateOne({userid}, {
+            $set: {dataEncryptionKey: newKey}
         })
     } catch (error) {
         console.error(error);
