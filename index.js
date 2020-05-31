@@ -177,15 +177,18 @@ app.post('/login/token', [check('username').isString(), check('clientEphemeralPu
 })
 
 //Register
-app.post('/register', [check("username").isString(), check("salt"), check("verifier"), check("key§")], async(req, res)=>{
+app.post('/register', [check("username").isString(), check("salt"), check("verifier")], async(req, res)=>{
     const vErrors = validationResult(req)
     if(!vErrors.isEmpty()){
         console.log(vErrors)
-        throw 'error.register.invalidquery'
+        res.json({
+            success: false,
+            err: 'error.register.invalidquery'
+        })
     }
-    const {username, salt, verifier, key} = req.body;
+    const {username, salt, verifier} = req.body;
     try{
-        const token = await register(username, salt, verifier, key)
+        const token = await register(username, salt, verifier)
         res.json({
             token: token,
             err: null,
@@ -380,7 +383,7 @@ async function initUser(user) {
     }
 }
 
-async function register(username, salt, verifier, key){
+async function register(username, salt, verifier){
     const user = await db.collection("users").findOne({username: username}, {projection: {_id: 0}})
     console.log(user)
     if(!user){//User doesnt exist
@@ -389,8 +392,7 @@ async function register(username, salt, verifier, key){
             userid,
             username,
             verifier,
-            salt,
-            dataEncryptionKey: key
+            salt
         })
         let token = JWT.sign({ userid: userid, username: username }, secret, { expiresIn: 129600 }); // Sign JWT token
         /*
