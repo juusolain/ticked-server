@@ -210,6 +210,28 @@ app.post('/register', [check("username").isString(), check("salt"), check("verif
     }
 });
 
+app.post('/datakey/set', [check('key')], async(req, res)=>{
+    const vErrors = validationResult(req)
+    if(!vErrors.isEmpty()){
+        console.log(vErrors)
+        throw 'error.datakey.invalidquery'
+    }
+    const {key} = req.body;
+    const userid = req.user.userid
+    try{
+        const token = await setDataKey(userid, key)
+        res.json({
+            err: null,
+            success: true
+        })
+    }catch(err){
+        res.json({
+            err: err,
+            success: false
+        })
+    }
+})
+
 app.get('/newSubscription', JWTmw, async(req, res)=>{
     const checkout = await payments.getSubscriptionCheckout(req.user.userid)
     res.json({
@@ -383,7 +405,7 @@ async function register(username, salt, verifier, key){
     }
 }
 
-async function getDataEncryptionKey(userid){
+async function getDataKey(userid){
     if(!userid) {
         throw 'error.login.invalidquery'
     }
@@ -391,6 +413,20 @@ async function getDataEncryptionKey(userid){
         const res = await db.collection('tasks').find({userid}, {projection: {_id: 0}}).toArray()
         const user = res[0]
         return user.dataEncryptionKey
+    } catch (error) {
+        console.error(error);
+        throw 'error.servererror'
+    }
+}
+
+async function setDataKey(userid, newKey){
+    if(!userid || !newKey) {
+        throw 'error.datakey.invalidquery'
+    }
+    try {
+        await db.collection('tasks').updateOne({userid}, {
+            $set: {key: newKey}
+        })
     } catch (error) {
         console.error(error);
         throw 'error.servererror'
