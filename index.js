@@ -393,10 +393,11 @@ async function register(username, salt, verifier, key){
             dataEncryptionKey: key
         })
         let token = JWT.sign({ userid: userid, username: username }, secret, { expiresIn: 129600 }); // Sign JWT token
+        /*
         initUser({
             userid: userid, 
             username: username
-        })
+        })*/
         if (isDev) console.log(`User registered ${username}: ${token}`);
         return token
     }else{
