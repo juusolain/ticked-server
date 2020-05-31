@@ -213,7 +213,7 @@ app.post('/register', [check("username").isString(), check("salt"), check("verif
         }
     }
 });
-s
+
 app.post('/datakey/set', [check('key')], JWTmw, async(req, res)=>{
     const vErrors = validationResult(req)
     if(!vErrors.isEmpty()){
@@ -223,12 +223,13 @@ app.post('/datakey/set', [check('key')], JWTmw, async(req, res)=>{
     const {key} = req.body
     const userid = req.user.userid
     try{
-        const token = await setDataKey(userid, key)
+        await setDataKey(userid, key)
         res.json({
             err: null,
             success: true
         })
     }catch(err){
+        console.warn(error)
         res.json({
             err: err,
             success: false
@@ -432,7 +433,7 @@ async function setDataKey(userid, newKey){
             $set: {dataEncryptionKey: newKey}
         })
     } catch (error) {
-        console.error(error);
+        console.error(error)
         throw 'error.servererror'
     }
 }
