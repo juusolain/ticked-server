@@ -414,7 +414,7 @@ async function getDataKey(userid){
         throw 'error.login.invalidquery'
     }
     try {
-        const user = await db.collection('users').findOne({userid}, {projection: {_id: 0}}).toArray()
+        const user = await db.collection('users').findOne({userid}, {projection: {_id: 0}})
         return user.dataEncryptionKey
     } catch (error) {
         console.error(error);
