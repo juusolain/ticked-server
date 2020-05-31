@@ -415,6 +415,7 @@ async function getDataKey(userid){
     }
     try {
         const user = await db.collection('users').findOne({userid}, {projection: {_id: 0}})
+        console.log(user)
         return user.dataEncryptionKey
     } catch (error) {
         console.error(error);
