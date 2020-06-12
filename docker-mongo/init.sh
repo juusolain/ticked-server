@@ -14,3 +14,5 @@ db.createCollection('users')
 db.createCollection('tasks')
 db.createCollection('lists')
 EOF
+
+echo "done"
