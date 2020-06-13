@@ -34,8 +34,6 @@ const DB_URL = process.env.DATABASE_URL || `mongodb://${DB_USER}:${DB_PASS}@${DB
 const PORT = process.env.PORT || 5000;
 const isDev = true;
 
-console.log(process.env)
-
 const payments = new Payments(STRIPE_KEY)
 
 var currentLogins = new Map()
@@ -83,6 +81,7 @@ async function dbConnect(tries = 0) {
         console.log('Mongo connected')
     } catch (error) {
         console.warn('MongoClient connection failed, trying again in 5 seconds')
+        console.log(error)
         await sleep(5000)
         await dbConnect(tries)
     }
