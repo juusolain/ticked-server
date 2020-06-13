@@ -34,6 +34,8 @@ const DB_URL = process.env.DATABASE_URL || `mongodb://${DB_USER}:${DB_PASS}@${DB
 const PORT = process.env.PORT || 5000;
 const isDev = true;
 
+console.log(process.env)
+
 const payments = new Payments(STRIPE_KEY)
 
 var currentLogins = new Map()
@@ -88,12 +90,12 @@ async function dbConnect(tries = 0) {
 
 
 
-//Sample response
+// Sample response
 app.get('/', (req, res)=>{
     res.send('Ticked-server test response')
 })
 
-//Login
+// Login
 // Give salt to client and get client public ephemeral key and username
 app.post('/login/salt', [check('username').isString(), check('clientEphemeralPublic')], async (req, res)=>{ 
     const {clientEphemeralPublic, username} = req.body;

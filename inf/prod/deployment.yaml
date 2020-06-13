@@ -10,7 +10,7 @@ spec:
   minReadySeconds: 5
   progressDeadlineSeconds: 600
   replicas: 1
-  revisionHistoryLimit: 10
+  revisionHistoryLimit: 0
   selector:
     matchLabels:
       app: ticked
@@ -26,7 +26,7 @@ spec:
     spec:
       containers:
         - image: 'jusola/ticked:latest'
-          imagePullPolicy: never
+          imagePullPolicy: Always
           name: ticked
           env:
             - name: GET_HOSTS_FROM
