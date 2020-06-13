@@ -76,7 +76,7 @@ async function dbConnect(tries = 0) {
     }
     tries++
     try {
-        const client = await MongoClient.connect(DB_URL)
+        const client = await MongoClient.connect(DB_URL, { useUnifiedTopology:true })
         db = await client.db('ticked')
         console.log('Mongo connected')
     } catch (error) {
