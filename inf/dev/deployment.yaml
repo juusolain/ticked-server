@@ -29,7 +29,7 @@ spec:
     spec:
       containers:
         - image: 'jusola/ticked:next'
-          imagePullPolicy: Always
+          imagePullPolicy: Never
           name: ticked
           env:
             - name: GET_HOSTS_FROM

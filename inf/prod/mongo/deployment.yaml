@@ -39,3 +39,4 @@
           - name: mongo-data
             persistentVolumeClaim:
               claimName: mongo-pvc
+    revisionHistoryLimit: 0

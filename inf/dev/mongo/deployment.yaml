@@ -17,15 +17,15 @@ spec:
     spec:
       containers:
         - name: master
-          image: jusola/ticked-mongo:latest
-          imagePullPolicy: Always
+          image: jusola/ticked-mongo:next
+          imagePullPolicy: Never
           resources:
             requests:
               cpu: 10m
               memory: 25Mi
             limits:
               cpu: 25m
-              memory: 100Mi
+              memory: 200Mi
           ports:
             - containerPort: 27017
               name: mongo
