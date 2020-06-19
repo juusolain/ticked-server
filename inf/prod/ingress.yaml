@@ -10,16 +10,7 @@ spec:
       - backend:
           serviceName: ticked
           servicePort: 5000
-  - host: ticked.jusola.xyz
-    http:
-      paths:
-      - backend:
-          serviceName: ticked
-          servicePort: 5000
   tls:
   - hosts:
     - api.ticked.jusola.xyz
     secretName: api-ticked-cert
-  - hosts:
-    - ticked.jusola.xyz
-    secretName: main-ticked-cert
