@@ -45,7 +45,9 @@ const app = express();
 
 //Headers
 app.use((req, res, next) => {
-    res.setHeader('Access-Control-Allow-Headers', 'Content-type,Authorization');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-type,Authorization')
+    res.setHeader('Access-Control-Allow-Origin', 'https://ticked.jusola.xyz')
+    res.setHeader('Vary', 'Origin')
     next();
 });
 
@@ -77,7 +79,7 @@ async function dbConnect(tries = 0) {
     tries++
     try {
         const client = await MongoClient.connect(DB_URL, { useUnifiedTopology:true })
-        db = await client.db('ticked')
+        db = await client.db(DB_NAME)
         console.log('Mongo connected')
     } catch (error) {
         console.warn('MongoClient connection failed, trying again in 5 seconds')
