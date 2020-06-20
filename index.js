@@ -45,7 +45,9 @@ const app = express();
 
 //Headers
 app.use((req, res, next) => {
-    res.setHeader('Access-Control-Allow-Headers', 'Content-type,Authorization');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-type,Authorization')
+    res.setHeader('Access-Control-Allow-Origin', 'https://ticked.jusola.xyz')
+    res.setHeader('Vary', 'Origin')
     next();
 });
 
