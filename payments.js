@@ -6,19 +6,21 @@ class Payments {
     this.stripe = Stripe(STRIPE_KEY)
   }
   
-  getSubscriptionCheckout = async (userid) =>{
+  getSubscriptionCheckout = async (userid, customerid) =>{
     try {
       const session = await this.stripe.checkout.sessions.create({
         client_reference_id: userid,
+        customer: customerid,
         payment_method_types: ['card'],
         metadata: {
           userid: userid
         },
-        subscription_data: {
-          items: [{
-            plan: 'pro-yearly',
-          }],
-        },
+        line_items: [
+          {
+            price: 'pro-yearly',
+            quantity:  1
+          }
+        ],
         success_url: 'https://ticked.jusola.xyz/#/payments/success',
         cancel_url: 'https://ticked.jusola.xyz/#/payments/cancel'
       });
@@ -34,9 +36,22 @@ class Payments {
         customer: customerID,
         return_url: 'https://ticked.jusola.xyz/#/payments/return',
       });
-      return session.id
+      return session.url
     } catch (error) {
       throw 'error.payments.manage'
+    }
+  }
+
+  newCustomer = async (userid) => {
+    try {
+      const customer = await stripe.customers.create({
+        metadata: {
+          userid
+        }
+      })
+      return customer.id
+    } catch (error) {
+      console.error(error)
     }
   }
 }

@@ -46,8 +46,14 @@ const app = express();
 //Headers
 app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Headers', 'Content-type,Authorization')
-    res.setHeader('Access-Control-Allow-Origin', 'https://ticked.jusola.xyz')
-    res.setHeader('Vary', 'Origin')
+    if(process.env.NODE_ENV !== "development"){
+        res.setHeader('Access-Control-Allow-Origin', 'https://ticked.jusola.xyz')
+        res.setHeader('Vary', 'Origin')
+    }else{
+        console.log("Not in production - Access-Control-Allow-Origin: *")
+        res.setHeader('Access-Control-Allow-Origin', '*')
+    }
+
     next();
 });
 
@@ -241,7 +247,8 @@ app.post('/datakey/set', [check('key')], JWTmw, async(req, res)=>{
 })
 
 app.get('/newSubscription', JWTmw, async(req, res)=>{
-    const checkout = await payments.getSubscriptionCheckout(req.user.userid)
+    const customerID = await getCustomerID(req.user.userid)
+    const checkout = await payments.getSubscriptionCheckout(req.user.userid, customerID)
     res.json({
         success: true,
         err: null,
@@ -250,7 +257,8 @@ app.get('/newSubscription', JWTmw, async(req, res)=>{
 })
 
 app.get('/manageSubscription', JWTmw, async(req, res)=>{
-    const billingPortal = await payments.getBillingPortal(req.user.userid)
+    const customerID = await getCustomerID(req.user.userid)
+    const billingPortal = await payments.getBillingPortal(customerID)
     res.json({
         success: true,
         err: null,
@@ -377,14 +385,22 @@ async function initUser(user) {
     if(!user.username || !user.userid) throw 'error.invalidquery'
     try {
         console.log(`Initing ${user.username}`)
-        const customer = await payments.createCustomer()
+        await createCustomer(user.userid)
+    } catch (error) {
+        console.error(error)
+        throw 'error.servererror'
+    }
+}
+
+async function createCustomer(userid){
+    try {
+        const customerID = await payments.newCustomer(userid)
         await db.collection('users').updateOne({
-            stripeCustomer: customer.id
+            $set: {stripeID: customerID}
         })
         console.log('Created stripe userid')
     } catch (error) {
         console.error(error)
-        throw 'error.servererror'
     }
 }
 
@@ -400,11 +416,10 @@ async function register(username, salt, verifier){
             salt
         })
         let token = JWT.sign({ userid: userid, username: username }, secret, { expiresIn: 129600 }); // Sign JWT token
-        /*
         initUser({
             userid: userid, 
             username: username
-        })*/
+        })
         if (isDev) console.log(`User registered ${username}: ${token}`);
         return token
     }else{
@@ -591,6 +606,25 @@ async function getKey(userid){
         console.error(error)
         throw error
     }
+}
+
+async function getCustomerID (userid){
+    try {
+        if(userid){
+            const user = await db.collection("users").findOne({userid: userid}, {projection: {_id: 0}})
+            if(user.stripeID){
+                return user.stripeID
+            }else{
+                return await createCustomer(userid)
+            }
+        }else{
+            throw 'error.getcustomerid'
+        }
+    } catch (error) {
+        throw 'error.getcustomerid'
+    }
+
+    
 }
 
 //Error middleware
