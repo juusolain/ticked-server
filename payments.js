@@ -19,8 +19,8 @@ class Payments {
             plan: 'pro-yearly',
           }],
         },
-        success_url: 'https://ticked.jusola.xyz/back-from-stripe/success.html?session_id={CHECKOUT_SESSION_ID}',
-        cancel_url: 'https://ticked.jusola.xyz/back-from-stripe/cancel.html'
+        success_url: 'https://ticked.jusola.xyz/#/payments/success',
+        cancel_url: 'https://ticked.jusola.xyz/#/payments/cancel'
       });
       return session.id
     } catch (error) {
@@ -32,45 +32,12 @@ class Payments {
     try {
       const session = await this.stripe.billingPortal.sessions.create({
         customer: customerID,
-        return_url: 'https://ticked.jusola.xyz/back-from-stripe/success.html',
+        return_url: 'https://ticked.jusola.xyz/#/payments/return',
       });
       return session.id
     } catch (error) {
       throw 'error.payments.manage'
     }
-  }
-
-  createCustomer = async (email) => {
-    const customer = await this.stripe.customer.create({
-      email: email
-    })
-    return customer
-  }
-
-  createSubscription = async (paymentMethodID, customerID) => {
-    try {
-      await this.stripe.paymentMethods.attach(paymentMethod, {
-        customer: customerID
-      })
-    } catch (error) {
-      console.warn(error)
-      throw 'error.stripe.attachPaymentMethod'
-    }
-
-    await this.stripe.customers.update(
-      customerID,
-      {
-        invoice_settings: {
-          default_payment_method: paymentMethodID,
-        },
-      }
-    );
-
-    const subscription = await stripe.subscriptions.create({
-      customer: req.body.customerId,
-      items: [{ price: 'pro-yearly' }],
-      expand: ['latest_invoice.payment_intent'],
-    });
   }
 }
 

@@ -12,6 +12,8 @@
     "docker:build:mongo:dev": "docker build ./docker-mongo -t jusola/ticked-mongo:next",
     "docker:push:dev": "docker push jusola/ticked:next",
     "docker:push": "docker push jusola/ticked:latest",
+    "docker:push:mongo:dev": "docker push jusola/ticked-mongo:next",
+    "docker:push:mongo": "docker push jusola/ticked-mongo:latest",
     "docker:deploy:dev": "npm run docker:build:dev",
     "docker:deploy": "npm run docker:build && npm run docker:push",
     "kube:apply": "kubectl apply -k inf/prod --context=\"kubesail-jusola\"",
