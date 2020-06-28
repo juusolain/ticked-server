@@ -25,6 +25,7 @@ if(!process.env.secret){
 
 const secret = process.env.secret || fallbackSecret
 const STRIPE_KEY = process.env.STRIPE_KEY
+const STRIPE_HOOK_SECRET = process.env.STRIPE_HOOK_SECRET
 const DB_USER = process.env.MONGO_USERNAME || 'ticked'
 const DB_PASS = process.env.MONGO_PASSWORD || '1234'
 const DB_NAME = process.env.MONGO_DATABASE || 'ticked'
@@ -223,6 +224,32 @@ app.post('/register', [check("username").isString(), check("salt"), check("verif
     }
 });
 
+app.post('/stripe-hook', bodyParser.raw({type: 'application/json'}), (req, res) => {
+    const sig = req.headers['stripe-signature'];
+  
+    let event;
+  
+    try {
+      event = stripe.webhooks.constructEvent(req.body, sig, STRIPE_HOOK_SECRET);
+    } catch (err) {
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+    
+    if (event.type === 'customer.subscription.updated') {
+        try {
+            const session = event.data.object
+            console.log(session)
+            const customer = session.customer
+            const status = session.status
+            await setCustomerSubscriptionStatus(customer, status)
+        } catch (error) {
+            res.status(400).send(`Error: ${error.toString()}`)
+        }
+      }
+    // Return a response to acknowledge receipt of the event
+    res.json({received: true})
+})
+
 app.post('/datakey/set', [check('key')], JWTmw, async(req, res)=>{
     const vErrors = validationResult(req)
     if(!vErrors.isEmpty()){
@@ -262,7 +289,7 @@ app.get('/manageSubscription', JWTmw, async(req, res)=>{
     res.json({
         success: true,
         err: null,
-        token: billingPortal
+        url: billingPortal
     })
 })
 
@@ -395,10 +422,11 @@ async function initUser(user) {
 async function createCustomer(userid){
     try {
         const customerID = await payments.newCustomer(userid)
-        await db.collection('users').updateOne({
+        await db.collection('users').updateOne({userid}, {
             $set: {stripeID: customerID}
         })
         console.log('Created stripe userid')
+        return customerID
     } catch (error) {
         console.error(error)
     }
@@ -622,9 +650,34 @@ async function getCustomerID (userid){
         }
     } catch (error) {
         throw 'error.getcustomerid'
-    }
+    }    
+}
 
-    
+async function getUserIDByStripe (customerID){
+    try {
+        if(customerID){
+            const user = await db.collection("users").findOne({stripeID: customerID}, {projection: {_id: 0}})
+            if(user.userid){
+                return user.userid
+            }
+        }else{
+            throw 'error.getcustomerid'
+        }
+    } catch (error) {
+        throw 'error.getcustomerid'
+    }    
+}
+
+async function setCustomerSubscriptionStatus (customerid, newStatus){
+    try {
+        const userID = await getUserIDByStripe(customerid)
+        await db.collection('users').updateOne({userid}, {
+            $set: {subscriptionStatus: newStatus}
+        })
+    } catch (error) {
+        console.error(error)
+        throw error
+    }
 }
 
 //Error middleware

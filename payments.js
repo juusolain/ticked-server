@@ -1,5 +1,6 @@
 import Stripe from 'stripe'
 
+const base_url = process.env.NODE_ENV == "development" ? 'http://localhost:8080/' : 'https://ticked.jusola.xyz/'
 
 class Payments {
   constructor(STRIPE_KEY) {
@@ -21,11 +22,13 @@ class Payments {
             quantity:  1
           }
         ],
-        success_url: 'https://ticked.jusola.xyz/#/payments/success',
-        cancel_url: 'https://ticked.jusola.xyz/#/payments/cancel'
+        mode: 'subscription',
+        success_url: base_url+'#/payments?from=checkout&cancel=false',
+        cancel_url: base_url+'#/payments?from=checkout&cancel=true'
       });
       return session.id
     } catch (error) {
+      console.error(error)
       throw 'error.payments.subscription'
     }
   }
@@ -34,17 +37,19 @@ class Payments {
     try {
       const session = await this.stripe.billingPortal.sessions.create({
         customer: customerID,
-        return_url: 'https://ticked.jusola.xyz/#/payments/return',
+        return_url: base_url+'#/payments?from=portal',
       });
-      return session.url
+      console.log(session)
+      return session.url 
     } catch (error) {
+      console.error(error)
       throw 'error.payments.manage'
     }
   }
 
   newCustomer = async (userid) => {
     try {
-      const customer = await stripe.customers.create({
+      const customer = await this.stripe.customers.create({
         metadata: {
           userid
         }
