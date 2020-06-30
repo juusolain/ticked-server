@@ -71,6 +71,7 @@ app.use((req, res, next)=>{
 //JWT middleware
 const JWTmw = expressJWT({
     secret: secret,
+    algorithms: ['HS256']
 });
 
 function sleep(ms) {
@@ -587,7 +588,6 @@ async function deleteAccount(userid){
     } catch (error) {
         throw error.toString()
     }
-
 }
 
 async function setKey(userid, newKey){

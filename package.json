@@ -37,19 +37,15 @@
   "homepage": "https://github.com/jusola/ticked-server#readme",
   "dependencies": {
     "body-parser": "^1.19.0",
-    "cors": "^2.8.5",
-    "express": "^5.0.0-alpha.7",
-    "express-jwt": "^5.3.1",
+    "express": "^5.0.0-alpha.8",
+    "express-jwt": "^6.0.0",
     "express-sanitizer": "^1.0.5",
-    "express-validator": "^6.4.1",
+    "express-validator": "^6.6.0",
     "jsonwebtoken": "^8.5.1",
     "mongo-sanitize": "^1.1.0",
-    "mongodb": "^3.5.7",
-    "node-cache": "^5.1.0",
+    "mongodb": "^3.5.9",
     "secure-remote-password": "^0.3.1",
-    "slonik": "^22.4.3",
-    "slonik-interceptor-query-cache": "^2.0.1",
-    "stripe": "^8.49.0",
-    "uuid": "^7.0.0"
+    "stripe": "^8.67.0",
+    "uuid": "^8.2.0"
   }
 }
