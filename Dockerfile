@@ -4,8 +4,6 @@ FROM node:12-alpine
 
 WORKDIR /app
 
-ENV NODE_ENV="production"
-
 # Add common build deps
 RUN chown -R node /app /home/node && \
   rm -rf /var/lib/apt/lists/*

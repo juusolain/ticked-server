@@ -2,6 +2,7 @@
 set -e
 
 mongo <<EOF
+use ticked
 db.createUser({
   user:  '$MONGO_USERNAME',
   pwd: '$MONGO_PASSWORD',
@@ -15,4 +16,6 @@ db.createCollection('tasks')
 db.createCollection('lists')
 EOF
 
-echo "done"
+echo "--------------------------------------------------------------------------"
+echo "-----------------------DATABASE INIT COMPLETE-----------------------------"
+echo "--------------------------------------------------------------------------"

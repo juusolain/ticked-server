@@ -25,7 +25,7 @@ spec:
               memory: 25Mi
             limits:
               cpu: 25m
-              memory: 200Mi
+              memory: 500Mi
           ports:
             - containerPort: 27017
               name: mongo

@@ -1,29 +1,34 @@
 import Stripe from 'stripe'
 
+const base_url = process.env.NODE_ENV == "development" ? 'http://localhost:8080/' : 'https://ticked.jusola.xyz/'
 
 class Payments {
   constructor(STRIPE_KEY) {
     this.stripe = Stripe(STRIPE_KEY)
   }
   
-  getSubscriptionCheckout = async (userid) =>{
+  getSubscriptionCheckout = async (userid, customerid) =>{
     try {
       const session = await this.stripe.checkout.sessions.create({
         client_reference_id: userid,
+        customer: customerid,
         payment_method_types: ['card'],
         metadata: {
           userid: userid
         },
-        subscription_data: {
-          items: [{
-            plan: 'pro-yearly',
-          }],
-        },
-        success_url: 'https://ticked.jusola.xyz/back-from-stripe/success.html?session_id={CHECKOUT_SESSION_ID}',
-        cancel_url: 'https://ticked.jusola.xyz/back-from-stripe/cancel.html'
+        line_items: [
+          {
+            price: 'pro-yearly',
+            quantity:  1
+          }
+        ],
+        mode: 'subscription',
+        success_url: base_url+'#/payments?from=checkout&cancel=false',
+        cancel_url: base_url+'#/payments?from=checkout&cancel=true'
       });
       return session.id
     } catch (error) {
+      console.error(error)
       throw 'error.payments.subscription'
     }
   }
@@ -32,45 +37,27 @@ class Payments {
     try {
       const session = await this.stripe.billingPortal.sessions.create({
         customer: customerID,
-        return_url: 'https://ticked.jusola.xyz/back-from-stripe/success.html',
+        return_url: base_url+'#/payments?from=portal',
       });
-      return session.id
+      console.log(session)
+      return session.url 
     } catch (error) {
+      console.error(error)
       throw 'error.payments.manage'
     }
   }
 
-  createCustomer = async (email) => {
-    const customer = await this.stripe.customer.create({
-      email: email
-    })
-    return customer
-  }
-
-  createSubscription = async (paymentMethodID, customerID) => {
+  newCustomer = async (userid) => {
     try {
-      await this.stripe.paymentMethods.attach(paymentMethod, {
-        customer: customerID
+      const customer = await this.stripe.customers.create({
+        metadata: {
+          userid
+        }
       })
+      return customer.id
     } catch (error) {
-      console.warn(error)
-      throw 'error.stripe.attachPaymentMethod'
+      console.error(error)
     }
-
-    await this.stripe.customers.update(
-      customerID,
-      {
-        invoice_settings: {
-          default_payment_method: paymentMethodID,
-        },
-      }
-    );
-
-    const subscription = await stripe.subscriptions.create({
-      customer: req.body.customerId,
-      items: [{ price: 'pro-yearly' }],
-      expand: ['latest_invoice.payment_intent'],
-    });
   }
 }
 
