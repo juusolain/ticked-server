@@ -4,7 +4,7 @@ import bodyParser from 'body-parser';
 import JWT from 'jsonwebtoken';
 import expressJWT from 'express-jwt';
 import crypto from 'crypto';
-import uuid from 'uuid';
+import {v4 as uuidv4} from 'uuid';
 import srp from 'secure-remote-password/server.js';
 import sanitize from 'mongo-sanitize'
 import expressSanitizer from 'express-sanitizer'
@@ -86,6 +86,7 @@ async function dbConnect(tries = 0) {
     }
     tries++
     try {
+        console.log("Connecting mongo")
         const client = await MongoClient.connect(DB_URL, { useUnifiedTopology:true })
         db = await client.db(DB_NAME)
         console.log('Mongo connected')
@@ -437,7 +438,7 @@ async function register(username, salt, verifier){
     const user = await db.collection("users").findOne({username: username}, {projection: {_id: 0}})
     console.log(user)
     if(!user){//User doesnt exist
-        const userid = uuid.v4()
+        const userid = uuidv4()
         await db.collection("users").insertOne({
             userid,
             username,
