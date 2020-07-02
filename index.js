@@ -225,13 +225,13 @@ app.post('/register', [check("username").isString(), check("salt"), check("verif
     }
 });
 
-app.post('/stripe-hook', bodyParser.raw({type: 'application/json'}), (req, res) => {
+app.post('/stripe-hook', bodyParser.raw({type: 'application/json'}), async(req, res) => {
     const sig = req.headers['stripe-signature'];
   
     let event;
   
     try {
-      event = stripe.webhooks.constructEvent(req.body, sig, STRIPE_HOOK_SECRET);
+      event = await stripe.webhooks.constructEvent(req.body, sig, STRIPE_HOOK_SECRET);
     } catch (err) {
       return res.status(400).send(`Webhook Error: ${err.message}`);
     }
