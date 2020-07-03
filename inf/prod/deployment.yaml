@@ -22,6 +22,7 @@ spec:
       labels:
         app: ticked
         tier: backend
+        deployedBy: deploy-node-app
     spec:
       containers:
         - image: 'jusola/ticked:latest'
@@ -36,6 +37,7 @@ spec:
           ports:
             - containerPort: 5000
               name: http
+              protocol: TCP
           resources:
             limits:
               cpu: 400m
