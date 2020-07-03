@@ -88,9 +88,9 @@ async function dbConnect(tries = 0) {
         db = await client.db(DB_NAME)
         console.log('Mongo connected')
     } catch (error) {
-        console.warn(`MongoClient connection failed, trying again in ${min(tries*60+5, 60*30)} seconds`)
+        console.warn(`MongoClient connection failed, trying again in ${min(tries*30, 60*30)} seconds`)
         console.log(error)
-        await sleep(min(tries*60*1000+5000, 1000*60*30))
+        await sleep(min(tries*30*1000, 1000*60*30))
         await dbConnect(tries)
     }
 }
