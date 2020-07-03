@@ -81,9 +81,6 @@ function sleep(ms) {
 //Setting up DB
 var db
 async function dbConnect(tries = 0) {
-    if(tries > 5){
-        throw new Error('MongoClient connection failed, 5 tries exhausted')
-    }
     tries++
     try {
         console.log("Connecting mongo")
@@ -91,9 +88,9 @@ async function dbConnect(tries = 0) {
         db = await client.db(DB_NAME)
         console.log('Mongo connected')
     } catch (error) {
-        console.warn('MongoClient connection failed, trying again in 5 seconds')
+        console.warn(`MongoClient connection failed, trying again in ${min(tries*60+5, 60*30)} seconds`)
         console.log(error)
-        await sleep(5000)
+        await sleep(min(tries*60*1000+5000, 1000*60*30))
         await dbConnect(tries)
     }
 }
@@ -697,8 +694,8 @@ app.use(function (err, req, res, next) {
 
 async function initialize () {
     try {
-        await app.listen(PORT)
         await dbConnect()
+        await app.listen(PORT)
         console.log(`Listening on ${PORT}`)
     } catch (error) {
         console.error(error)
