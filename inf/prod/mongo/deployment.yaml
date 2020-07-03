@@ -24,7 +24,7 @@
                 cpu: 10m
                 memory: 25Mi
               limits:
-                cpu: 25m
+                cpu: 200m
                 memory: 100Mi
             ports:
               - containerPort: 27017

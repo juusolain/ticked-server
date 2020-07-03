@@ -4,7 +4,7 @@ import bodyParser from 'body-parser';
 import JWT from 'jsonwebtoken';
 import expressJWT from 'express-jwt';
 import crypto from 'crypto';
-import uuid from 'uuid';
+import {v4 as uuidv4} from 'uuid';
 import srp from 'secure-remote-password/server.js';
 import sanitize from 'mongo-sanitize'
 import expressSanitizer from 'express-sanitizer'
@@ -81,18 +81,16 @@ function sleep(ms) {
 //Setting up DB
 var db
 async function dbConnect(tries = 0) {
-    if(tries > 5){
-        throw new Error('MongoClient connection failed, 5 tries exhausted')
-    }
     tries++
     try {
+        console.log("Connecting mongo")
         const client = await MongoClient.connect(DB_URL, { useUnifiedTopology:true })
         db = await client.db(DB_NAME)
         console.log('Mongo connected')
     } catch (error) {
-        console.warn('MongoClient connection failed, trying again in 5 seconds')
+        console.warn(`MongoClient connection failed, trying again in ${min(tries*30, 60*30)} seconds`)
         console.log(error)
-        await sleep(5000)
+        await sleep(min(tries*30*1000, 1000*60*30))
         await dbConnect(tries)
     }
 }
@@ -437,7 +435,7 @@ async function register(username, salt, verifier){
     const user = await db.collection("users").findOne({username: username}, {projection: {_id: 0}})
     console.log(user)
     if(!user){//User doesnt exist
-        const userid = uuid.v4()
+        const userid = uuidv4()
         await db.collection("users").insertOne({
             userid,
             username,
