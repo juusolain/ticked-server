@@ -697,8 +697,8 @@ app.use(function (err, req, res, next) {
 
 async function initialize () {
     try {
-        await dbConnect()
         await app.listen(PORT)
+        await dbConnect()
         console.log(`Listening on ${PORT}`)
     } catch (error) {
         console.error(error)
