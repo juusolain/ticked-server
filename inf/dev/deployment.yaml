@@ -31,6 +31,8 @@ spec:
           env:
             - name: GET_HOSTS_FROM
               value: dns
+            - name: NODE_ENV
+              value: development
           envFrom:
           - secretRef:
               name: secret

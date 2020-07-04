@@ -51,7 +51,6 @@ app.use((req, res, next) => {
         res.setHeader('Access-Control-Allow-Origin', 'https://ticked.jusola.xyz')
         res.setHeader('Vary', 'Origin')
     }else{
-        console.log("Not in production - Access-Control-Allow-Origin: *")
         res.setHeader('Access-Control-Allow-Origin', '*')
     }
 
